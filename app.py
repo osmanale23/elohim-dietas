@@ -359,7 +359,9 @@ def dieta_gerencia():
                            floor_label=FLOOR_LABEL)
 
 
+# Inicializar DB al arrancar (gunicorn o directo)
+init_db()
+
 if __name__ == '__main__':
-    init_db()
     port = int(os.environ.get('PORT', 5001))
     app.run(host='0.0.0.0', port=port, debug=False)

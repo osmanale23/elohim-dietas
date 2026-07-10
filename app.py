@@ -1,0 +1,365 @@
+"""
+Sistema de Dietas — Centro Médico Elohim
+Gestión de alimentación para pacientes internados (Piso 5, Piso 6, UCI)
+"""
+
+import os
+import json
+import sqlite3
+from datetime import datetime, date
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify
+from dotenv import load_dotenv
+
+load_dotenv()
+
+app = Flask(__name__)
+app.secret_key = os.environ.get('SECRET_KEY', 'dieta-elohim-2025')
+DB_PATH = os.environ.get('DIETA_DB', 'dieta.db')
+
+PASSWORDS = {
+    'piso5':     os.environ.get('PASS_PISO5',  'Piso5Elohim'),
+    'piso6':     os.environ.get('PASS_PISO6',  'Piso6Elohim'),
+    'uci':       os.environ.get('PASS_UCI',    'UCIElohim'),
+    'cafeteria': os.environ.get('PASS_CAF',    'CafetElohim'),
+    'gerencia':  os.environ.get('PASS_GER',    'GerenciaElohim'),
+}
+
+ROLE_NAMES = {
+    'piso5':     'Enfermería — Piso 5',
+    'piso6':     'Enfermería — Piso 6',
+    'uci':       'Enfermería — UCI',
+    'cafeteria': 'Cafetería',
+    'gerencia':  'Gerencia',
+}
+
+FLOOR_LABEL = {
+    'piso5': 'Piso 5',
+    'piso6': 'Piso 6',
+    'uci':   'UCI',
+}
+
+DIET_OPTIONS = {
+    'corriente': {
+        'desayuno': [
+            'Avena cocida en leche descremada (250ml)',
+            '2 huevos hervidos o revueltos',
+            '2 rebanadas de pan integral',
+            'Porción de fruta blanda (lechosa, sandía, melón o guineo)',
+            'Té o café',
+        ],
+        'almuerzo': [
+            'Sopa de vegetales con pollo',
+            '1 taza de arroz blanco o integral / Trigo',
+            'Pechuga de pollo a la plancha (120-150g)',
+            'Vegetales cocidos (zanahoria, auyama, brócoli, coliflor, repollo)',
+            'Ensalada fresca según tolerancia',
+            'Jugo natural sin azúcar añadida',
+        ],
+        'cena': [
+            'Pescado al horno o pollo desmenuzado (120g)',
+            'Puré de papa / yautía / batata / plátano maduro',
+            'Vegetales cocidos',
+            'Huevo hervido (alternativa proteica)',
+            'Queso mozzarella o Gouda (alternativa proteica)',
+        ],
+    },
+    'blanda': {
+        'desayuno': [
+            'Avena cocida en leche descremada (250ml)',
+            '2 huevos hervidos o revueltos',
+            'Porción de fruta blanda (lechosa, melón, guineo, sandía)',
+            'Té o café según tolerancia',
+            'Yogurt griego',
+        ],
+        'almuerzo': [
+            'Vegetales cocidos (zanahoria, brócoli, auyama, coliflor)',
+            'Ensalada fresca según tolerancia',
+            'Puré de papa / yautía / auyama / plátano maduro',
+            'Pollo desmenuzado (150-200g)',
+            'Sopas licuadas',
+        ],
+        'cena': [
+            'Pescado al horno o pollo desmenuzado (120g)',
+            'Puré de papa / yautía / batata / plátano maduro',
+            'Vegetales cocidos blandos',
+            'Sopa de vegetales',
+            'Huevo hervido (alternativa proteica)',
+            'Queso mozzarella o Gouda (alternativa proteica)',
+        ],
+    },
+    'liquida': {
+        'desayuno': [
+            'Avena licuada en leche descremada',
+            'Jugo natural sin azúcar añadida',
+            'Té o infusión sin azúcar',
+            'Caldo de pollo liviano',
+        ],
+        'almuerzo': [
+            'Sopa licuada de vegetales con pollo',
+            'Caldo de pollo o res desgrasado',
+            'Jugo natural sin azúcar',
+            'Gelatina sin azúcar',
+        ],
+        'cena': [
+            'Sopa licuada de vegetales',
+            'Caldo desgrasado',
+            'Jugo natural sin azúcar',
+            'Infusión / té sin azúcar',
+        ],
+    },
+}
+
+CONDITION_NOTES = {
+    'normal':      None,
+    'diabetico':   'Sin azúcar refinada · Frutas bajo índice glucémico · Carbohidratos en porciones controladas · NO jugos azucarados · Proteína en cada comida',
+    'renal':       'Limitar potasio y fósforo · Proteínas controladas · Evitar exceso de lácteos · Sin sal añadida',
+    'disfagia':    'Consistencia licuada o puré · Evitar sólidos duros · Espesar líquidos según indicación médica',
+    'cardiopatia': 'Bajo sodio · Bajo en grasa saturada · Sin sal añadida · Evitar fritos y embutidos',
+}
+
+CONDITION_LABEL = {
+    'normal':      'Normal',
+    'diabetico':   'Diabético',
+    'renal':       'Insuf. Renal',
+    'disfagia':    'Disfagia',
+    'cardiopatia': 'Cardiopatía',
+}
+
+MEAL_TIMES = [
+    ('desayuno', 'Desayuno', '7:30 AM'),
+    ('almuerzo', 'Almuerzo', '12:30 PM'),
+    ('cena',     'Cena',     '6:30 PM'),
+]
+
+
+# ─── DATABASE ───────────────────────────────────────────────────────────────
+def get_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def init_db():
+    conn = get_db()
+    conn.executescript('''
+        CREATE TABLE IF NOT EXISTS patients (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            name        TEXT NOT NULL,
+            floor       TEXT NOT NULL,
+            room        TEXT NOT NULL,
+            diet_type   TEXT NOT NULL DEFAULT 'corriente',
+            condition   TEXT NOT NULL DEFAULT 'normal',
+            notes       TEXT DEFAULT '',
+            active      INTEGER DEFAULT 1,
+            registered_by TEXT,
+            created_at  TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at  TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS meal_orders (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            patient_id      INTEGER NOT NULL,
+            order_date      TEXT NOT NULL,
+            meal_time       TEXT NOT NULL,
+            options_selected TEXT DEFAULT '[]',
+            confirmed       INTEGER DEFAULT 0,
+            confirmed_by    TEXT,
+            confirmed_at    TEXT,
+            extra_notes     TEXT DEFAULT '',
+            FOREIGN KEY (patient_id) REFERENCES patients(id)
+        );
+    ''')
+    conn.commit()
+    conn.close()
+
+
+# ─── AUTH ────────────────────────────────────────────────────────────────────
+@app.route('/', methods=['GET'])
+def root():
+    return redirect(url_for('dieta_login'))
+
+
+@app.route('/login', methods=['GET', 'POST'])
+def dieta_login():
+    error = None
+    if request.method == 'POST':
+        pwd = request.form.get('password', '').strip()
+        for role, secret in PASSWORDS.items():
+            if pwd == secret:
+                session['dieta_role'] = role
+                if role == 'cafeteria':
+                    return redirect(url_for('dieta_cafeteria'))
+                elif role == 'gerencia':
+                    return redirect(url_for('dieta_gerencia'))
+                else:
+                    return redirect(url_for('dieta_nurse'))
+        error = 'Contraseña incorrecta'
+    return render_template('dieta_login.html', error=error)
+
+
+@app.route('/logout')
+def dieta_logout():
+    session.pop('dieta_role', None)
+    return redirect(url_for('dieta_login'))
+
+
+def nurse_required():
+    role = session.get('dieta_role')
+    if role not in ('piso5', 'piso6', 'uci'):
+        return redirect(url_for('dieta_login'))
+    return None
+
+
+# ─── NURSE VIEW ───────────────────────────────────────────────────────────────
+@app.route('/nurse')
+def dieta_nurse():
+    redir = nurse_required()
+    if redir: return redir
+    role = session['dieta_role']
+    conn = get_db()
+    patients = conn.execute(
+        'SELECT * FROM patients WHERE floor=? AND active=1 ORDER BY room', (role,)
+    ).fetchall()
+    conn.close()
+    today = date.today().strftime('%Y-%m-%d')
+    return render_template('dieta_nurse.html',
+                           patients=patients,
+                           role=role,
+                           role_name=ROLE_NAMES[role],
+                           floor_label=FLOOR_LABEL[role],
+                           today=today,
+                           diet_options=DIET_OPTIONS,
+                           condition_notes=CONDITION_NOTES,
+                           condition_label=CONDITION_LABEL)
+
+
+@app.route('/api/patient/add', methods=['POST'])
+def add_patient():
+    if nurse_required(): return jsonify({'error': 'unauthorized'}), 403
+    d = request.json
+    role = session['dieta_role']
+    conn = get_db()
+    cur = conn.execute(
+        'INSERT INTO patients (name, floor, room, diet_type, condition, notes, registered_by) VALUES (?,?,?,?,?,?,?)',
+        (d['name'].strip(), role, d['room'].strip(), d['diet_type'], d.get('condition', 'normal'), d.get('notes', ''), role)
+    )
+    pid = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True, 'id': pid})
+
+
+@app.route('/api/patient/<int:pid>/update', methods=['POST'])
+def update_patient(pid):
+    if nurse_required(): return jsonify({'error': 'unauthorized'}), 403
+    d = request.json
+    conn = get_db()
+    conn.execute(
+        'UPDATE patients SET diet_type=?, condition=?, notes=?, updated_at=? WHERE id=?',
+        (d['diet_type'], d.get('condition', 'normal'), d.get('notes', ''), datetime.now().isoformat(), pid)
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True})
+
+
+@app.route('/api/patient/<int:pid>/discharge', methods=['POST'])
+def discharge_patient(pid):
+    if nurse_required(): return jsonify({'error': 'unauthorized'}), 403
+    conn = get_db()
+    conn.execute('UPDATE patients SET active=0, updated_at=? WHERE id=?', (datetime.now().isoformat(), pid))
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True})
+
+
+# ─── CAFETERÍA VIEW ──────────────────────────────────────────────────────────
+@app.route('/cafeteria')
+def dieta_cafeteria():
+    if session.get('dieta_role') != 'cafeteria':
+        return redirect(url_for('dieta_login'))
+    today = request.args.get('date', date.today().strftime('%Y-%m-%d'))
+    conn = get_db()
+    patients = conn.execute(
+        'SELECT * FROM patients WHERE active=1 ORDER BY floor, room'
+    ).fetchall()
+    orders = conn.execute(
+        'SELECT * FROM meal_orders WHERE order_date=?', (today,)
+    ).fetchall()
+    conn.close()
+    orders_map = {(o['patient_id'], o['meal_time']): dict(o) for o in orders}
+    return render_template('dieta_cafeteria.html',
+                           patients=patients,
+                           orders_map=orders_map,
+                           today=today,
+                           meal_times=MEAL_TIMES,
+                           diet_options=DIET_OPTIONS,
+                           condition_notes=CONDITION_NOTES,
+                           condition_label=CONDITION_LABEL,
+                           floor_label=FLOOR_LABEL)
+
+
+@app.route('/api/order/save', methods=['POST'])
+def save_order():
+    if session.get('dieta_role') != 'cafeteria':
+        return jsonify({'error': 'unauthorized'}), 403
+    d = request.json
+    now = datetime.now().isoformat()
+    conn = get_db()
+    existing = conn.execute(
+        'SELECT id FROM meal_orders WHERE patient_id=? AND order_date=? AND meal_time=?',
+        (d['patient_id'], d['date'], d['meal_time'])
+    ).fetchone()
+    if existing:
+        conn.execute(
+            'UPDATE meal_orders SET options_selected=?, confirmed=1, confirmed_by=?, confirmed_at=?, extra_notes=? WHERE id=?',
+            (json.dumps(d['options']), 'cafeteria', now, d.get('notes', ''), existing['id'])
+        )
+    else:
+        conn.execute(
+            'INSERT INTO meal_orders (patient_id, order_date, meal_time, options_selected, confirmed, confirmed_by, confirmed_at, extra_notes) VALUES (?,?,?,?,1,?,?,?)',
+            (d['patient_id'], d['date'], d['meal_time'], json.dumps(d['options']), 'cafeteria', now, d.get('notes', ''))
+        )
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True})
+
+
+# ─── GERENCIA VIEW ────────────────────────────────────────────────────────────
+@app.route('/gerencia')
+def dieta_gerencia():
+    if session.get('dieta_role') != 'gerencia':
+        return redirect(url_for('dieta_login'))
+    today = request.args.get('date', date.today().strftime('%Y-%m-%d'))
+    floor_filter = request.args.get('floor', 'all')
+    conn = get_db()
+    if floor_filter == 'all':
+        patients = conn.execute('SELECT * FROM patients WHERE active=1 ORDER BY floor, room').fetchall()
+    else:
+        patients = conn.execute('SELECT * FROM patients WHERE active=1 AND floor=? ORDER BY room', (floor_filter,)).fetchall()
+    orders = conn.execute('SELECT * FROM meal_orders WHERE order_date=?', (today,)).fetchall()
+    # Stats
+    all_active = conn.execute('SELECT COUNT(*) FROM patients WHERE active=1').fetchone()[0]
+    confirmed_today = conn.execute('SELECT COUNT(*) FROM meal_orders WHERE order_date=? AND confirmed=1', (today,)).fetchone()[0]
+    pending_today = (all_active * 3) - confirmed_today
+    conn.close()
+    orders_map = {(o['patient_id'], o['meal_time']): dict(o) for o in orders}
+    return render_template('dieta_gerencia.html',
+                           patients=patients,
+                           orders_map=orders_map,
+                           today=today,
+                           floor_filter=floor_filter,
+                           all_active=all_active,
+                           confirmed_today=confirmed_today,
+                           pending_today=max(0, pending_today),
+                           meal_times=MEAL_TIMES,
+                           diet_options=DIET_OPTIONS,
+                           condition_notes=CONDITION_NOTES,
+                           condition_label=CONDITION_LABEL,
+                           floor_label=FLOOR_LABEL)
+
+
+if __name__ == '__main__':
+    init_db()
+    port = int(os.environ.get('PORT', 5001))
+    app.run(host='0.0.0.0', port=port, debug=False)

@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ floor_label }} — Dietas CME</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  :root {
+    --bone: #F7F3EE; --white: #fff;
+    --green: #4E7C5F; --green-l: #7FAE8E; --green-xl: #D1E8DA;
+    --dark: #243B2E; --mid: #4A6050; --border: #DDD5C8;
+  }
+  body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
+  /* HEADER */
+  .header {
+    background: var(--green); color: white;
+    padding: 16px 28px; display:flex; align-items:center; justify-content:space-between;
+  }
+  .header-left { display:flex; align-items:center; gap:14px; }
+  .floor-badge {
+    background: rgba(255,255,255,0.2); border-radius:8px;
+    padding: 6px 14px; font-size:14px; font-weight:700; letter-spacing:1px;
+  }
+  .header-title { font-size:18px; font-weight:700; }
+  .header-date { font-size:12px; opacity:0.8; margin-top:2px; }
+  .logout-btn {
+    background: rgba(255,255,255,0.15); border:1px solid rgba(255,255,255,0.3);
+    color:white; padding:8px 16px; border-radius:8px; cursor:pointer;
+    font-size:13px; text-decoration:none; transition:background 0.2s;
+  }
+  .logout-btn:hover { background:rgba(255,255,255,0.25); }
+  /* MAIN */
+  .main { max-width: 900px; margin: 0 auto; padding: 28px 20px; }
+  .top-bar { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; }
+  .section-title { font-size:18px; font-weight:700; color:var(--dark); }
+  .count-badge { font-size:13px; color:var(--mid); }
+  .add-btn {
+    background: var(--green); color:white;
+    border:none; padding:10px 20px; border-radius:10px;
+    font-size:14px; font-weight:600; cursor:pointer; transition:background 0.2s;
+  }
+  .add-btn:hover { background:var(--dark); }
+  /* EMPTY */
+  .empty {
+    text-align:center; padding:60px 20px; color:var(--mid);
+    background:white; border-radius:16px; border:2px dashed var(--border);
+  }
+  .empty-icon { font-size:40px; margin-bottom:12px; }
+  /* PATIENT CARDS */
+  .patient-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:16px; }
+  .patient-card {
+    background:white; border-radius:14px; padding:20px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06); border-left:4px solid var(--green);
+    transition: transform 0.15s;
+  }
+  .patient-card:hover { transform:translateY(-2px); }
+  .card-top { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px; }
+  .patient-name { font-size:16px; font-weight:700; color:var(--dark); }
+  .room-tag {
+    background: #EEF6F0; color:var(--green);
+    font-size:12px; font-weight:700; padding:3px 10px; border-radius:6px;
+  }
+  .badges { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px; }
+  .badge {
+    font-size:11px; font-weight:600; padding:3px 9px; border-radius:20px;
+  }
+  .diet-corriente { background:#E8F5E9; color:#2E7D32; }
+  .diet-blanda    { background:#FFF8E1; color:#F57F17; }
+  .diet-liquida   { background:#E3F2FD; color:#1565C0; }
+  .cond-normal     { display:none; }
+  .cond-diabetico  { background:#FFF3E0; color:#E65100; }
+  .cond-renal      { background:#FCE4EC; color:#B71C1C; }
+  .cond-disfagia   { background:#F3E5F5; color:#6A1B9A; }
+  .cond-cardiopatia{ background:#FCE4EC; color:#B71C1C; }
+  .condition-note {
+    font-size:11px; color:#856404; background:#FFF8CD;
+    border:1px solid #FFE082; border-radius:6px; padding:8px 10px;
+    margin-bottom:12px; line-height:1.5;
+  }
+  .card-actions { display:flex; gap:8px; }
+  .edit-btn {
+    flex:1; background:#EEF6F0; color:var(--green);
+    border:1px solid var(--green-xl); padding:8px 0;
+    border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; transition:background 0.2s;
+  }
+  .edit-btn:hover { background:var(--green-xl); }
+  .discharge-btn {
+    background:#FFF0F0; color:#C0392B;
+    border:1px solid #F5C6C6; padding:8px 12px;
+    border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; transition:background 0.2s;
+  }
+  .discharge-btn:hover { background:#FDEDEC; }
+
+  /* MODAL */
+  .modal-overlay {
+    display:none; position:fixed; inset:0;
+    background:rgba(0,0,0,0.45); z-index:1000;
+    align-items:center; justify-content:center;
+  }
+  .modal-overlay.active { display:flex; }
+  .modal {
+    background:white; border-radius:18px; padding:32px;
+    width:100%; max-width:480px; max-height:90vh; overflow-y:auto;
+    box-shadow: 0 12px 60px rgba(0,0,0,0.2);
+  }
+  .modal-title { font-size:18px; font-weight:700; color:var(--dark); margin-bottom:20px; }
+  .form-group { margin-bottom:16px; }
+  .form-group label {
+    display:block; font-size:11px; color:var(--mid);
+    margin-bottom:6px; letter-spacing:1px; text-transform:uppercase; font-weight:600;
+  }
+  .form-group input, .form-group select, .form-group textarea {
+    width:100%; padding:12px 14px;
+    border:1.5px solid var(--border); border-radius:10px;
+    font-size:14px; color:var(--dark); background:var(--bone);
+    outline:none; transition:border 0.2s; font-family:sans-serif;
+  }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+    border-color:var(--green); background:white;
+  }
+  .form-group textarea { resize:vertical; min-height:70px; }
+  .modal-actions { display:flex; gap:10px; margin-top:20px; }
+  .save-btn {
+    flex:1; background:var(--green); color:white;
+    border:none; padding:13px; border-radius:10px;
+    font-size:14px; font-weight:600; cursor:pointer; transition:background 0.2s;
+  }
+  .save-btn:hover { background:var(--dark); }
+  .cancel-btn {
+    background:#F2F2F2; color:var(--mid);
+    border:none; padding:13px 20px; border-radius:10px;
+    font-size:14px; font-weight:600; cursor:pointer;
+  }
+  .cancel-btn:hover { background:#E5E5E5; }
+  .toast {
+    position:fixed; bottom:24px; right:24px;
+    background:var(--dark); color:white;
+    padding:12px 20px; border-radius:10px; font-size:13px;
+    z-index:2000; opacity:0; transition:opacity 0.3s; pointer-events:none;
+  }
+  .toast.show { opacity:1; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <div class="floor-badge">{{ floor_label }}</div>
+    <div>
+      <div class="header-title">{{ role_name }}</div>
+      <div class="header-date">{{ today }}</div>
+    </div>
+  </div>
+  <a href="/logout" class="logout-btn">Cerrar sesión</a>
+</div>
+
+<div class="main">
+  <div class="top-bar">
+    <div>
+      <div class="section-title">Pacientes Activos</div>
+      <div class="count-badge">{{ patients|length }} paciente{% if patients|length != 1 %}s{% endif %} en {{ floor_label }}</div>
+    </div>
+    <button class="add-btn" onclick="openAdd()">+ Registrar Paciente</button>
+  </div>
+
+  {% if patients %}
+  <div class="patient-grid">
+    {% for p in patients %}
+    <div class="patient-card" id="card-{{ p.id }}">
+      <div class="card-top">
+        <div class="patient-name">{{ p.name }}</div>
+        <div class="room-tag">Hab. {{ p.room }}</div>
+      </div>
+      <div class="badges">
+        <span class="badge diet-{{ p.diet_type }}">
+          {% if p.diet_type == 'corriente' %}Dieta Corriente
+          {% elif p.diet_type == 'blanda' %}Dieta Blanda
+          {% else %}Dieta Líquida{% endif %}
+        </span>
+        {% if p.condition != 'normal' %}
+        <span class="badge cond-{{ p.condition }}">
+          {{ condition_label[p.condition] }}
+        </span>
+        {% endif %}
+      </div>
+      {% if p.condition != 'normal' and condition_notes[p.condition] %}
+      <div class="condition-note">⚠️ {{ condition_notes[p.condition] }}</div>
+      {% endif %}
+      {% if p.notes %}
+      <div style="font-size:12px;color:var(--mid);margin-bottom:12px;font-style:italic;">📝 {{ p.notes }}</div>
+      {% endif %}
+      <div class="card-actions">
+        <button class="edit-btn" onclick="openEdit({{ p.id }}, '{{ p.name }}', '{{ p.room }}', '{{ p.diet_type }}', '{{ p.condition }}', `{{ p.notes }}`)">
+          ✏️ Editar
+        </button>
+        <button class="discharge-btn" onclick="discharge({{ p.id }}, '{{ p.name }}')">Alta</button>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty">
+    <div class="empty-icon">🛏️</div>
+    <div style="font-size:16px;font-weight:600;color:var(--dark);margin-bottom:8px;">Sin pacientes registrados</div>
+    <div style="font-size:13px;">Usa el botón "+ Registrar Paciente" para agregar el primero.</div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- ADD MODAL -->
+<div class="modal-overlay" id="addModal">
+  <div class="modal">
+    <div class="modal-title">➕ Registrar Paciente</div>
+    <div class="form-group">
+      <label>Nombre del paciente</label>
+      <input type="text" id="addName" placeholder="Ej: María García" required>
+    </div>
+    <div class="form-group">
+      <label>Número de Habitación</label>
+      <input type="text" id="addRoom" placeholder="Ej: 501">
+    </div>
+    <div class="form-group">
+      <label>Tipo de Dieta</label>
+      <select id="addDiet">
+        <option value="corriente">Dieta Corriente (alimentación normal)</option>
+        <option value="blanda">Dieta Blanda / Suave</option>
+        <option value="liquida">Dieta Líquida (sopas y caldos)</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Condición Especial</label>
+      <select id="addCondition">
+        <option value="normal">Sin condición especial</option>
+        <option value="diabetico">Diabético</option>
+        <option value="renal">Insuficiencia Renal</option>
+        <option value="disfagia">Disfagia</option>
+        <option value="cardiopatia">Cardiopatía</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Notas adicionales (opcional)</label>
+      <textarea id="addNotes" placeholder="Ej: alergia al mariscos, preferencias, etc."></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="cancel-btn" onclick="closeAdd()">Cancelar</button>
+      <button class="save-btn" onclick="saveAdd()">Registrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT MODAL -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal">
+    <div class="modal-title">✏️ Editar Paciente</div>
+    <input type="hidden" id="editId">
+    <div class="form-group">
+      <label>Paciente</label>
+      <input type="text" id="editName" readonly style="background:#f5f5f5;color:#888;">
+    </div>
+    <div class="form-group">
+      <label>Habitación</label>
+      <input type="text" id="editRoom" readonly style="background:#f5f5f5;color:#888;">
+    </div>
+    <div class="form-group">
+      <label>Tipo de Dieta</label>
+      <select id="editDiet">
+        <option value="corriente">Dieta Corriente</option>
+        <option value="blanda">Dieta Blanda / Suave</option>
+        <option value="liquida">Dieta Líquida</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Condición Especial</label>
+      <select id="editCondition">
+        <option value="normal">Sin condición especial</option>
+        <option value="diabetico">Diabético</option>
+        <option value="renal">Insuficiencia Renal</option>
+        <option value="disfagia">Disfagia</option>
+        <option value="cardiopatia">Cardiopatía</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Notas adicionales</label>
+      <textarea id="editNotes"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="cancel-btn" onclick="closeEdit()">Cancelar</button>
+      <button class="save-btn" onclick="saveEdit()">Guardar cambios</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ADD
+function openAdd() { document.getElementById('addModal').classList.add('active'); }
+function closeAdd() { document.getElementById('addModal').classList.remove('active'); }
+async function saveAdd() {
+  const name = document.getElementById('addName').value.trim();
+  const room = document.getElementById('addRoom').value.trim();
+  if (!name || !room) { showToast('Completa nombre y habitación'); return; }
+  const r = await fetch('/api/patient/add', {
+    method: 'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      name, room,
+      diet_type: document.getElementById('addDiet').value,
+      condition: document.getElementById('addCondition').value,
+      notes: document.getElementById('addNotes').value
+    })
+  });
+  if ((await r.json()).ok) { showToast('Paciente registrado ✓'); setTimeout(()=>location.reload(), 1000); }
+}
+
+// EDIT
+function openEdit(id, name, room, diet, cond, notes) {
+  document.getElementById('editId').value = id;
+  document.getElementById('editName').value = name;
+  document.getElementById('editRoom').value = room;
+  document.getElementById('editDiet').value = diet;
+  document.getElementById('editCondition').value = cond;
+  document.getElementById('editNotes').value = notes;
+  document.getElementById('editModal').classList.add('active');
+}
+function closeEdit() { document.getElementById('editModal').classList.remove('active'); }
+async function saveEdit() {
+  const id = document.getElementById('editId').value;
+  const r = await fetch(`/api/patient/${id}/update`, {
+    method: 'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      diet_type: document.getElementById('editDiet').value,
+      condition: document.getElementById('editCondition').value,
+      notes: document.getElementById('editNotes').value
+    })
+  });
+  if ((await r.json()).ok) { showToast('Actualizado ✓'); setTimeout(()=>location.reload(), 1000); }
+}
+
+// DISCHARGE
+async function discharge(id, name) {
+  if (!confirm(`¿Dar de alta a ${name}? Se retirará de la lista activa.`)) return;
+  const r = await fetch(`/api/patient/${id}/discharge`, {method:'POST'});
+  if ((await r.json()).ok) {
+    showToast(`${name} dado de alta`);
+    document.getElementById(`card-${id}`).style.opacity = '0.3';
+    setTimeout(()=>location.reload(), 1200);
+  }
+}
+</script>
+</body>
+</html>

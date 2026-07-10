@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sistema de Dietas — CME</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  :root {
+    --bone: #F7F3EE;
+    --white: #FFFFFF;
+    --green: #4E7C5F;
+    --green-l: #7FAE8E;
+    --green-xl: #D1E8DA;
+    --dark: #243B2E;
+    --mid: #4A5E50;
+    --border: #DDD5C8;
+    --uci: #C0392B;
+    --p5: #2980B9;
+    --p6: #8E44AD;
+  }
+  body {
+    background: var(--bone);
+    font-family: 'Georgia', serif;
+    min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .card {
+    background: var(--white);
+    border-radius: 20px;
+    padding: 52px 44px;
+    width: 100%; max-width: 440px;
+    box-shadow: 0 4px 40px rgba(78,124,95,0.10);
+    text-align: center;
+  }
+  .logo {
+    width: 60px; height: 60px;
+    background: var(--green);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 20px;
+    font-size: 26px;
+  }
+  .title { font-size: 22px; font-weight: 700; color: var(--dark); letter-spacing: 2px; }
+  .sub { font-size: 12px; color: var(--mid); margin-top: 6px; font-style: italic; font-family: sans-serif; }
+  .divider { width: 40px; height: 2px; background: var(--green-xl); margin: 24px auto; }
+  .roles {
+    display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;
+    margin-bottom: 24px;
+  }
+  .role-tag {
+    font-size: 11px; font-family: sans-serif;
+    padding: 4px 10px; border-radius: 20px;
+    font-weight: 600; letter-spacing: 0.5px;
+  }
+  .role-p5 { background: #EAF4FB; color: var(--p5); }
+  .role-p6 { background: #F5EEF8; color: var(--p6); }
+  .role-uci { background: #FDEDEC; color: var(--uci); }
+  .role-caf { background: #EAF5EA; color: var(--green); }
+  .role-ger { background: #FEF9E7; color: #D4AC0D; }
+  label { display:block; text-align:left; font-size:11px; color:var(--mid); margin-bottom:8px; letter-spacing:1px; text-transform:uppercase; font-family:sans-serif; }
+  input[type=password] {
+    width: 100%; padding: 14px 18px;
+    border: 1.5px solid var(--border);
+    border-radius: 10px; font-size: 16px;
+    color: var(--dark); background: var(--bone);
+    outline: none; transition: border 0.2s;
+  }
+  input[type=password]:focus { border-color: var(--green); background: var(--white); }
+  .btn {
+    width: 100%; margin-top: 18px; padding: 15px;
+    background: var(--green); color: white;
+    border: none; border-radius: 10px;
+    font-size: 15px; font-weight: 600; cursor: pointer;
+    letter-spacing: 1px; transition: background 0.2s; font-family: sans-serif;
+  }
+  .btn:hover { background: var(--dark); }
+  .error {
+    background: #FFF0F0; border: 1px solid #F5C6C6;
+    color: #C0392B; border-radius: 8px;
+    padding: 12px; margin-top: 14px;
+    font-size: 13px; font-family: sans-serif;
+  }
+  .footer { margin-top: 28px; font-size: 11px; color: var(--green-l); font-family: sans-serif; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">🍽️</div>
+  <div class="title">SISTEMA DE DIETAS</div>
+  <div class="sub">Centro Médico Elohim</div>
+  <div class="divider"></div>
+  <div class="roles">
+    <span class="role-tag role-p5">Piso 5</span>
+    <span class="role-tag role-p6">Piso 6</span>
+    <span class="role-tag role-uci">UCI</span>
+    <span class="role-tag role-caf">Cafetería</span>
+    <span class="role-tag role-ger">Gerencia</span>
+  </div>
+  <form method="POST">
+    <label>Contraseña de acceso</label>
+    <input type="password" name="password" placeholder="••••••••••••" autofocus required>
+    {% if error %}<div class="error">{{ error }}</div>{% endif %}
+    <button type="submit" class="btn">Entrar</button>
+  </form>
+  <div class="footer">Gestión nutricional de pacientes internados</div>
+</div>
+</body>
+</html>

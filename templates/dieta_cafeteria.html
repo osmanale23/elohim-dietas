@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cafetería — Dietas CME</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  :root {
+    --bone:#F7F3EE; --white:#fff;
+    --green:#4E7C5F; --green-l:#7FAE8E; --green-xl:#D1E8DA;
+    --dark:#243B2E; --mid:#4A6050; --border:#DDD5C8;
+    --p5:#2980B9; --p6:#8E44AD; --uci:#C0392B;
+  }
+  body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
+  .header {
+    background:var(--green); color:white;
+    padding:16px 28px; display:flex; align-items:center; justify-content:space-between;
+  }
+  .header-title { font-size:18px; font-weight:700; }
+  .header-sub { font-size:12px; opacity:0.8; margin-top:2px; }
+  .logout-btn {
+    background:rgba(255,255,255,0.15); border:1px solid rgba(255,255,255,0.3);
+    color:white; padding:8px 16px; border-radius:8px; cursor:pointer;
+    font-size:13px; text-decoration:none;
+  }
+  .main { max-width:1100px; margin:0 auto; padding:24px 20px; }
+  /* DATE & TABS */
+  .controls { display:flex; gap:16px; align-items:center; margin-bottom:24px; flex-wrap:wrap; }
+  .date-input {
+    border:1.5px solid var(--border); border-radius:10px;
+    padding:10px 14px; font-size:14px; background:white;
+    color:var(--dark); outline:none; cursor:pointer;
+  }
+  .date-input:focus { border-color:var(--green); }
+  .tabs { display:flex; gap:4px; background:white; padding:4px; border-radius:12px; border:1.5px solid var(--border); }
+  .tab {
+    padding:9px 22px; border-radius:9px; cursor:pointer;
+    font-size:14px; font-weight:600; color:var(--mid); border:none; background:transparent;
+    transition:all 0.2s;
+  }
+  .tab.active { background:var(--green); color:white; }
+  /* STATS BAR */
+  .stats { display:flex; gap:12px; margin-bottom:20px; }
+  .stat-box {
+    background:white; border-radius:12px; padding:14px 20px;
+    text-align:center; flex:1; border:1.5px solid var(--border);
+  }
+  .stat-num { font-size:24px; font-weight:700; color:var(--dark); }
+  .stat-label { font-size:11px; color:var(--mid); margin-top:2px; }
+  .stat-box.green .stat-num { color:var(--green); }
+  .stat-box.orange .stat-num { color:#E67E22; }
+  /* FLOOR SECTION */
+  .floor-section { margin-bottom:28px; }
+  .floor-header {
+    display:flex; align-items:center; gap:10px; margin-bottom:14px;
+  }
+  .floor-dot { width:10px; height:10px; border-radius:50%; }
+  .floor-p5 { background:var(--p5); }
+  .floor-p6 { background:var(--p6); }
+  .floor-uci { background:var(--uci); }
+  .floor-name { font-size:16px; font-weight:700; color:var(--dark); }
+  /* PATIENT ROWS */
+  .patient-row {
+    background:white; border-radius:14px; padding:18px 20px;
+    margin-bottom:12px; border-left:4px solid var(--border);
+    box-shadow:0 2px 8px rgba(0,0,0,0.05);
+  }
+  .patient-row.floor-piso5 { border-left-color:var(--p5); }
+  .patient-row.floor-piso6 { border-left-color:var(--p6); }
+  .patient-row.floor-uci   { border-left-color:var(--uci); }
+  .patient-info { display:flex; align-items:center; gap:12px; margin-bottom:14px; flex-wrap:wrap; }
+  .patient-name { font-size:15px; font-weight:700; color:var(--dark); }
+  .room-tag {
+    background:#EEF6F0; color:var(--green);
+    font-size:12px; font-weight:700; padding:3px 9px; border-radius:6px;
+  }
+  .badge {
+    font-size:11px; font-weight:600; padding:3px 9px; border-radius:20px;
+  }
+  .diet-corriente { background:#E8F5E9; color:#2E7D32; }
+  .diet-blanda    { background:#FFF8E1; color:#F57F17; }
+  .diet-liquida   { background:#E3F2FD; color:#1565C0; }
+  .cond-diabetico  { background:#FFF3E0; color:#E65100; }
+  .cond-renal      { background:#FCE4EC; color:#B71C1C; }
+  .cond-disfagia   { background:#F3E5F5; color:#6A1B9A; }
+  .cond-cardiopatia{ background:#FCE4EC; color:#B71C1C; }
+  .cond-note {
+    font-size:11px; color:#856404; background:#FFF8CD;
+    border:1px solid #FFE082; border-radius:6px; padding:7px 10px; margin-bottom:12px;
+  }
+  /* OPTIONS */
+  .options-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px,1fr)); gap:8px; margin-bottom:14px; }
+  .option-item {
+    display:flex; align-items:center; gap:8px;
+    font-size:13px; color:var(--dark); padding:8px 12px;
+    background:var(--bone); border-radius:8px; cursor:pointer; border:1.5px solid transparent;
+    transition:all 0.15s;
+  }
+  .option-item:hover { border-color:var(--green-xl); background:#EEF6F0; }
+  .option-item.selected { border-color:var(--green); background:#E8F5E9; }
+  .option-item input { cursor:pointer; accent-color:var(--green); }
+  .confirm-area { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .notes-input {
+    flex:1; min-width:180px; border:1.5px solid var(--border);
+    border-radius:8px; padding:9px 12px; font-size:13px; outline:none;
+  }
+  .notes-input:focus { border-color:var(--green); }
+  .confirm-btn {
+    background:var(--green); color:white; border:none;
+    padding:10px 22px; border-radius:9px; font-size:13px;
+    font-weight:700; cursor:pointer; transition:background 0.2s; white-space:nowrap;
+  }
+  .confirm-btn:hover { background:var(--dark); }
+  .confirmed-stamp {
+    display:inline-flex; align-items:center; gap:6px;
+    background:#E8F5E9; color:#2E7D32; border:1px solid #A5D6A7;
+    border-radius:8px; padding:8px 14px; font-size:13px; font-weight:600;
+  }
+  /* EMPTY */
+  .no-patients { text-align:center; padding:40px; color:var(--mid); background:white; border-radius:14px; }
+  .toast {
+    position:fixed; bottom:24px; right:24px;
+    background:var(--dark); color:white;
+    padding:12px 20px; border-radius:10px; font-size:13px;
+    z-index:2000; opacity:0; transition:opacity 0.3s; pointer-events:none;
+  }
+  .toast.show { opacity:1; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <div class="header-title">🍽️ Cafetería — Panel de Dietas</div>
+    <div class="header-sub">Centro Médico Elohim</div>
+  </div>
+  <a href="/logout" class="logout-btn">Cerrar sesión</a>
+</div>
+
+<div class="main">
+  <div class="controls">
+    <input type="date" class="date-input" id="datePicker" value="{{ today }}" onchange="changeDate(this.value)">
+    <div class="tabs">
+      {% for key, label, time in meal_times %}
+      <button class="tab {% if loop.first %}active{% endif %}" onclick="switchTab('{{ key }}', this)">
+        {{ label }} <span style="font-size:11px;opacity:0.7;">({{ time }})</span>
+      </button>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- STATS -->
+  {% set total_p = patients|length %}
+  {% set confirmed = namespace(count=0) %}
+  {% for p in patients %}
+    {% for key, _, _ in meal_times %}
+      {% if orders_map.get((p.id, key)) and orders_map[(p.id, key)]['confirmed'] %}
+        {% set confirmed.count = confirmed.count + 1 %}
+      {% endif %}
+    {% endfor %}
+  {% endfor %}
+  <div class="stats">
+    <div class="stat-box">
+      <div class="stat-num">{{ total_p }}</div>
+      <div class="stat-label">Pacientes activos</div>
+    </div>
+    <div class="stat-box green">
+      <div class="stat-num">{{ confirmed.count }}</div>
+      <div class="stat-label">Comidas confirmadas hoy</div>
+    </div>
+    <div class="stat-box orange">
+      <div class="stat-num">{{ [0, total_p * 3 - confirmed.count] | max }}</div>
+      <div class="stat-label">Pendientes de confirmar</div>
+    </div>
+  </div>
+
+  <!-- MEAL TABS CONTENT -->
+  {% for meal_key, meal_label, meal_time in meal_times %}
+  <div class="meal-tab-content" id="tab-{{ meal_key }}" style="display:{% if loop.first %}block{% else %}none{% endif %}">
+    {% set floors = [('piso5','Piso 5','floor-p5'), ('piso6','Piso 6','floor-p6'), ('uci','UCI','floor-uci')] %}
+    {% for floor_key, floor_name, floor_class in floors %}
+      {% set floor_patients = patients|selectattr('floor','equalto',floor_key)|list %}
+      {% if floor_patients %}
+      <div class="floor-section">
+        <div class="floor-header">
+          <div class="floor-dot {{ floor_class }}"></div>
+          <div class="floor-name">{{ floor_name }}</div>
+          <span style="font-size:12px;color:var(--mid);">— {{ floor_patients|length }} paciente{% if floor_patients|length!=1 %}s{% endif %}</span>
+        </div>
+        {% for p in floor_patients %}
+          {% set order = orders_map.get((p.id, meal_key)) %}
+          {% set is_confirmed = order and order['confirmed'] %}
+          <div class="patient-row floor-{{ p.floor }}">
+            <div class="patient-info">
+              <span class="patient-name">{{ p.name }}</span>
+              <span class="room-tag">Hab. {{ p.room }}</span>
+              <span class="badge diet-{{ p.diet_type }}">
+                {% if p.diet_type=='corriente' %}Dieta Corriente{% elif p.diet_type=='blanda' %}Dieta Blanda{% else %}Dieta Líquida{% endif %}
+              </span>
+              {% if p.condition != 'normal' %}
+              <span class="badge cond-{{ p.condition }}">{{ condition_label[p.condition] }}</span>
+              {% endif %}
+            </div>
+            {% if p.condition != 'normal' and condition_notes[p.condition] %}
+            <div class="cond-note">⚠️ {{ condition_notes[p.condition] }}</div>
+            {% endif %}
+
+            {% set opts = diet_options[p.diet_type][meal_key] %}
+            {% set selected_opts = order['options_selected']|default('[]') if order else '[]' %}
+            <div class="options-grid" id="opts-{{ p.id }}-{{ meal_key }}">
+              {% for opt in opts %}
+              <label class="option-item {% if opt in selected_opts %}selected{% endif %}" onclick="toggleOption(this)">
+                <input type="checkbox" value="{{ opt }}" {% if opt in selected_opts %}checked{% endif %}>
+                {{ opt }}
+              </label>
+              {% endfor %}
+            </div>
+
+            <div class="confirm-area">
+              <input type="text" class="notes-input" id="note-{{ p.id }}-{{ meal_key }}"
+                placeholder="Nota adicional (opcional)"
+                value="{{ order['extra_notes'] if order else '' }}">
+              {% if is_confirmed %}
+              <div class="confirmed-stamp" id="stamp-{{ p.id }}-{{ meal_key }}">
+                ✅ Enviado — {{ order['confirmed_at'][:10] if order['confirmed_at'] else '' }}
+              </div>
+              {% else %}
+              <div class="confirmed-stamp" id="stamp-{{ p.id }}-{{ meal_key }}" style="display:none;">✅ Confirmado</div>
+              {% endif %}
+              <button class="confirm-btn" onclick="confirm_order({{ p.id }}, '{{ meal_key }}', '{{ today }}')"
+                {% if is_confirmed %}style="background:#7FAE8E;"{% endif %}>
+                {% if is_confirmed %}Actualizar{% else %}✓ Confirmar envío{% endif %}
+              </button>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    {% endfor %}
+    {% if not patients %}
+    <div class="no-patients">
+      <div style="font-size:36px;margin-bottom:10px;">🛏️</div>
+      <div>No hay pacientes activos registrados</div>
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+function switchTab(key, el) {
+  document.querySelectorAll('.meal-tab-content').forEach(t => t.style.display='none');
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-'+key).style.display='block';
+  el.classList.add('active');
+}
+function changeDate(val) {
+  window.location.href = '/cafeteria?date='+val;
+}
+function toggleOption(el) {
+  el.classList.toggle('selected');
+  el.querySelector('input').checked = el.classList.contains('selected');
+}
+async function confirm_order(pid, mealKey, orderDate) {
+  const grid = document.getElementById(`opts-${pid}-${mealKey}`);
+  const selected = [...grid.querySelectorAll('input:checked')].map(i => i.value);
+  const notes = document.getElementById(`note-${pid}-${mealKey}`).value;
+  const r = await fetch('/api/order/save', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ patient_id:pid, meal_time:mealKey, date:orderDate, options:selected, notes })
+  });
+  if ((await r.json()).ok) {
+    const stamp = document.getElementById(`stamp-${pid}-${mealKey}`);
+    stamp.textContent = '✅ Confirmado';
+    stamp.style.display = 'inline-flex';
+    showToast('Envío confirmado ✓');
+  }
+}
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+</script>
+</body>
+</html>

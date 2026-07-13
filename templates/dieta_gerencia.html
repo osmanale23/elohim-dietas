@@ -143,10 +143,12 @@
     <span class="filter-label">Filtrar por:</span>
     <input type="date" class="filter-date" name="date" value="{{ today }}">
     <select class="filter-select" name="floor">
-      <option value="all" {% if floor_filter=='all' %}selected{% endif %}>Todos los pisos</option>
-      <option value="piso5" {% if floor_filter=='piso5' %}selected{% endif %}>Piso 5</option>
-      <option value="piso6" {% if floor_filter=='piso6' %}selected{% endif %}>Piso 6</option>
-      <option value="uci" {% if floor_filter=='uci' %}selected{% endif %}>UCI</option>
+      <option value="all"        {% if floor_filter=='all'        %}selected{% endif %}>Todos los pisos</option>
+      <option value="piso5"      {% if floor_filter=='piso5'      %}selected{% endif %}>Piso 5</option>
+      <option value="piso6"      {% if floor_filter=='piso6'      %}selected{% endif %}>Piso 6</option>
+      <option value="uci"        {% if floor_filter=='uci'        %}selected{% endif %}>UCI</option>
+      <option value="emergencia" {% if floor_filter=='emergencia' %}selected{% endif %}>Emergencia</option>
+      <option value="ucin"       {% if floor_filter=='ucin'       %}selected{% endif %}>UCIN</option>
     </select>
     <button type="submit" class="filter-btn">Aplicar filtro</button>
   </form>

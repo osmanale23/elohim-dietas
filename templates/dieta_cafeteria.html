@@ -10,7 +10,7 @@
     --bone:#F7F3EE; --white:#fff;
     --green:#4E7C5F; --green-l:#7FAE8E; --green-xl:#D1E8DA;
     --dark:#243B2E; --mid:#4A6050; --border:#DDD5C8;
-    --p5:#2980B9; --p6:#8E44AD; --uci:#C0392B;
+    --p5:#2980B9; --p6:#8E44AD; --uci:#C0392B; --emg:#E74C3C; --ucin:#6A1B9A;
   }
   body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
   .header {
@@ -56,10 +56,34 @@
     display:flex; align-items:center; gap:10px; margin-bottom:14px;
   }
   .floor-dot { width:10px; height:10px; border-radius:50%; }
-  .floor-p5 { background:var(--p5); }
-  .floor-p6 { background:var(--p6); }
+  .floor-p5  { background:var(--p5); }
+  .floor-p6  { background:var(--p6); }
   .floor-uci { background:var(--uci); }
+  .floor-emg { background:var(--emg); }
+  .floor-ucin{ background:var(--ucin); }
   .floor-name { font-size:16px; font-weight:700; color:var(--dark); }
+  /* STATUS BUTTONS */
+  .status-bar { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+  .status-btn {
+    padding:8px 16px; border-radius:8px; border:2px solid transparent;
+    font-size:13px; font-weight:700; cursor:pointer; transition:all 0.2s;
+    opacity:0.55;
+  }
+  .status-btn.active { opacity:1; transform:scale(1.04); }
+  .status-btn:hover  { opacity:0.85; }
+  .status-recibido  { background:#EAF4FB; color:#2980B9; border-color:#2980B9; }
+  .status-en_proceso{ background:#FEF5E7; color:#E67E22; border-color:#E67E22; }
+  .status-en_camino { background:#FEF9E7; color:#D4AC0D; border-color:#D4AC0D; }
+  .status-entregado { background:#E8F5E9; color:#27AE60; border-color:#27AE60; }
+  .status-label {
+    font-size:11px; font-weight:700; padding:4px 10px; border-radius:20px;
+    display:inline-flex; align-items:center; gap:5px;
+  }
+  .sl-pendiente  { background:#F2F2F2;  color:#888; }
+  .sl-recibido   { background:#EAF4FB;  color:#2980B9; }
+  .sl-en_proceso { background:#FEF5E7;  color:#E67E22; }
+  .sl-en_camino  { background:#FEF9E7;  color:#D4AC0D; }
+  .sl-entregado  { background:#E8F5E9;  color:#27AE60; }
   /* PATIENT ROWS */
   .patient-row {
     background:white; border-radius:14px; padding:18px 20px;
@@ -178,7 +202,7 @@
   <!-- MEAL TABS CONTENT -->
   {% for meal_key, meal_label, meal_time in meal_times %}
   <div class="meal-tab-content" id="tab-{{ meal_key }}" style="display:{% if loop.first %}block{% else %}none{% endif %}">
-    {% set floors = [('piso5','Piso 5','floor-p5'), ('piso6','Piso 6','floor-p6'), ('uci','UCI','floor-uci')] %}
+    {% set floors = [('piso5','Piso 5','floor-p5'), ('piso6','Piso 6','floor-p6'), ('uci','UCI','floor-uci'), ('emergencia','Emergencia','floor-emg'), ('ucin','UCIN','floor-ucin')] %}
     {% for floor_key, floor_name, floor_class in floors %}
       {% set floor_patients = patients|selectattr('floor','equalto',floor_key)|list %}
       {% if floor_patients %}
@@ -217,20 +241,23 @@
               {% endfor %}
             </div>
 
-            <div class="confirm-area">
-              <input type="text" class="notes-input" id="note-{{ p.id }}-{{ meal_key }}"
-                placeholder="Nota adicional (opcional)"
-                value="{{ order['extra_notes'] if order else '' }}">
-              {% if is_confirmed %}
-              <div class="confirmed-stamp" id="stamp-{{ p.id }}-{{ meal_key }}">
-                ✅ Enviado — {{ order['confirmed_at'][:10] if order['confirmed_at'] else '' }}
-              </div>
-              {% else %}
-              <div class="confirmed-stamp" id="stamp-{{ p.id }}-{{ meal_key }}" style="display:none;">✅ Confirmado</div>
-              {% endif %}
-              <button class="confirm-btn" onclick="confirm_order({{ p.id }}, '{{ meal_key }}', '{{ today }}')"
-                {% if is_confirmed %}style="background:#7FAE8E;"{% endif %}>
-                {% if is_confirmed %}Actualizar{% else %}✓ Confirmar envío{% endif %}
+            {% set cur_status = order['delivery_status'] if order and order['delivery_status'] else 'pendiente' %}
+            <div class="status-bar" id="sbar-{{ p.id }}-{{ meal_key }}">
+              <button class="status-btn status-recibido  {% if cur_status=='recibido'   %}active{% endif %}"
+                onclick="setStatus({{ p.id }},'{{ meal_key }}','{{ today }}','recibido',this)">
+                📥 Recibido
+              </button>
+              <button class="status-btn status-en_proceso {% if cur_status=='en_proceso' %}active{% endif %}"
+                onclick="setStatus({{ p.id }},'{{ meal_key }}','{{ today }}','en_proceso',this)">
+                👨‍🍳 En Proceso
+              </button>
+              <button class="status-btn status-en_camino  {% if cur_status=='en_camino'  %}active{% endif %}"
+                onclick="setStatus({{ p.id }},'{{ meal_key }}','{{ today }}','en_camino',this)">
+                🚀 En Camino
+              </button>
+              <button class="status-btn status-entregado  {% if cur_status=='entregado'  %}active{% endif %}"
+                onclick="setStatus({{ p.id }},'{{ meal_key }}','{{ today }}','entregado',this)">
+                ✅ Entregado
               </button>
             </div>
           </div>
@@ -264,19 +291,18 @@ function toggleOption(el) {
   el.classList.toggle('selected');
   el.querySelector('input').checked = el.classList.contains('selected');
 }
-async function confirm_order(pid, mealKey, orderDate) {
-  const grid = document.getElementById(`opts-${pid}-${mealKey}`);
-  const selected = [...grid.querySelectorAll('input:checked')].map(i => i.value);
-  const notes = document.getElementById(`note-${pid}-${mealKey}`).value;
-  const r = await fetch('/api/order/save', {
+async function setStatus(pid, mealKey, orderDate, status, btn) {
+  const r = await fetch('/api/order/delivery-status', {
     method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ patient_id:pid, meal_time:mealKey, date:orderDate, options:selected, notes })
+    body: JSON.stringify({ patient_id:pid, meal_time:mealKey, date:orderDate, status })
   });
   if ((await r.json()).ok) {
-    const stamp = document.getElementById(`stamp-${pid}-${mealKey}`);
-    stamp.textContent = '✅ Confirmado';
-    stamp.style.display = 'inline-flex';
-    showToast('Envío confirmado ✓');
+    // Deactivate all buttons in this status bar, activate clicked
+    const bar = document.getElementById(`sbar-${pid}-${mealKey}`);
+    bar.querySelectorAll('.status-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const labels = {recibido:'📥 Recibido', en_proceso:'👨‍🍳 En Proceso', en_camino:'🚀 En Camino', entregado:'✅ Entregado'};
+    showToast(`${labels[status]} — actualizado`);
   }
 }
 function showToast(msg) {

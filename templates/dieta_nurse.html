@@ -106,6 +106,31 @@
   .cond-renal      { background:#FCE4EC; color:#B71C1C; }
   .cond-disfagia   { background:#F3E5F5; color:#6A1B9A; }
   .cond-cardiopatia{ background:#FCE4EC; color:#B71C1C; }
+  /* DELIVERY STATUS */
+  .delivery-row { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
+  .ds-badge {
+    font-size:11px; font-weight:700; padding:3px 9px; border-radius:20px;
+    display:inline-flex; align-items:center; gap:4px;
+  }
+  .ds-pendiente  { background:#F2F2F2;  color:#888; }
+  .ds-recibido   { background:#EAF4FB;  color:#2980B9; }
+  .ds-en_proceso { background:#FEF5E7;  color:#E67E22; }
+  .ds-en_camino  { background:#FEF9E7;  color:#D4AC0D; }
+  .ds-entregado  { background:#E8F5E9;  color:#27AE60; }
+  .meal-status-row {
+    display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;
+  }
+  .recv-btn {
+    background:#4E7C5F; color:white; border:none;
+    padding:4px 12px; border-radius:20px; font-size:11px; font-weight:700;
+    cursor:pointer; transition:background 0.2s; white-space:nowrap;
+  }
+  .recv-btn:hover { background:#243B2E; }
+  .recv-stamp {
+    font-size:11px; font-weight:700; color:#27AE60;
+    background:#E8F5E9; padding:4px 10px; border-radius:20px;
+    border:1px solid #A5D6A7;
+  }
   .condition-note {
     font-size:11px; color:#856404; background:#FFF8CD;
     border:1px solid #FFE082; border-radius:6px; padding:8px 10px;
@@ -243,8 +268,39 @@
       <div class="condition-note">⚠️ {{ condition_notes[p.condition] }}</div>
       {% endif %}
       {% if p.notes %}
-      <div style="font-size:12px;color:var(--mid);margin-bottom:12px;font-style:italic;">📝 {{ p.notes }}</div>
+      <div style="font-size:12px;color:var(--mid);margin-bottom:10px;font-style:italic;">📝 {{ p.notes }}</div>
       {% endif %}
+      <!-- Estado de entregas del día -->
+      <div id="drow-{{ p.id }}">
+        {% for mk, ml, mh in [('desayuno','Desayuno','7:30 AM'),('almuerzo','Almuerzo','12:30 PM'),('cena','Cena','6:30 PM')] %}
+          {% set meal_icons = {'desayuno':'🌅','almuerzo':'☀️','cena':'🌙'} %}
+          {% set ord = orders_map.get((p.id, mk)) %}
+          {% set ds = ord['delivery_status'] if ord and ord['delivery_status'] else 'pendiente' %}
+          {% set nr = ord['nurse_received'] if ord else 0 %}
+          {% set ds_labels = {'pendiente':'Pendiente','recibido':'Recibido','en_proceso':'En Proceso','en_camino':'En Camino','entregado':'Entregado'} %}
+          <div class="meal-status-row">
+            <span class="ds-badge ds-{{ ds }}" id="ds-{{ p.id }}-{{ mk }}">
+              {{ meal_icons[mk] }} {{ ml }}: {{ ds_labels[ds] }}
+            </span>
+            {% if nr %}
+            <span class="recv-stamp" id="recv-{{ p.id }}-{{ mk }}">✓ Recibido por enfermería</span>
+            {% else %}
+            <button class="recv-btn" id="recv-{{ p.id }}-{{ mk }}"
+              onclick="marcarRecibido({{ p.id }}, '{{ mk }}', this)">
+              Marcar como Recibido
+            </button>
+            {% endif %}
+          </div>
+          {% if ord and ord['options_list'] %}
+          <div style="margin:-2px 0 8px 4px; padding:8px 12px; background:#F7FBF8; border-left:3px solid var(--green-l); border-radius:6px;">
+            <div style="font-size:10px;color:var(--mid);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;">🍽️ Seleccionado por Cafetería:</div>
+            {% for item in ord['options_list'] %}
+            <div style="font-size:12px;color:var(--dark);padding:2px 0;">• {{ item }}</div>
+            {% endfor %}
+          </div>
+          {% endif %}
+        {% endfor %}
+      </div>
       <div class="card-actions">
         <button class="discharge-btn" style="flex:1;" onclick="discharge({{ p.id }}, '{{ p.name }}')">🏥 Dar de Alta</button>
       </div>
@@ -396,6 +452,43 @@ async function saveAdd() {
   });
   if ((await r.json()).ok) { showToast('Paciente registrado ✓'); setTimeout(()=>location.reload(), 1000); }
 }
+
+// MARCAR RECIBIDO
+async function marcarRecibido(pid, mealKey, btn) {
+  const r = await fetch('/api/order/nurse-received', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ patient_id: pid, meal_time: mealKey })
+  });
+  if ((await r.json()).ok) {
+    const stamp = document.createElement('span');
+    stamp.className = 'recv-stamp';
+    stamp.id = btn.id;
+    stamp.textContent = '✓ Recibido por enfermería';
+    btn.replaceWith(stamp);
+    showToast('✅ Comida marcada como recibida');
+  }
+}
+
+// AUTO-REFRESH STATUS every 30s
+const DS_LABELS = {pendiente:'Pendiente',recibido:'Recibido',en_proceso:'En Proceso',en_camino:'En Camino',entregado:'Entregado'};
+const DS_ICONS  = {desayuno:'🌅',almuerzo:'☀️',cena:'🌙'};
+const MEAL_NAMES= {desayuno:'Desayuno',almuerzo:'Almuerzo',cena:'Cena'};
+
+async function refreshStatus() {
+  try {
+    const res = await fetch('/api/floor/status');
+    const data = await res.json();
+    for (const [key, status] of Object.entries(data)) {
+      const [pid, meal] = key.split('_');
+      const el = document.getElementById(`ds-${pid}-${meal}`);
+      if (el) {
+        el.className = `ds-badge ds-${status}`;
+        el.textContent = `${DS_ICONS[meal]} ${MEAL_NAMES[meal]}: ${DS_LABELS[status]}`;
+      }
+    }
+  } catch(e) {}
+}
+setInterval(refreshStatus, 30000);
 
 // DISCHARGE
 async function discharge(id, name) {

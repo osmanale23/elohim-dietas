@@ -207,6 +207,16 @@ def init_db():
         conn.commit()
     except Exception:
         pass
+    try:
+        conn.execute("ALTER TABLE meal_orders ADD COLUMN delivery_status TEXT DEFAULT 'pendiente'")
+        conn.commit()
+    except Exception:
+        pass
+    try:
+        conn.execute("ALTER TABLE meal_orders ADD COLUMN nurse_received INTEGER DEFAULT 0")
+        conn.commit()
+    except Exception:
+        pass
     conn.close()
 
 
@@ -265,23 +275,57 @@ def dieta_nurse():
     redir = nurse_required()
     if redir: return redir
     role = session['dieta_role']
+    today_str = date.today().strftime('%Y-%m-%d')
     conn = get_db()
     patients = conn.execute(
         'SELECT * FROM patients WHERE floor=? AND active=1 ORDER BY room', (role,)
     ).fetchall()
+    orders = conn.execute(
+        '''SELECT mo.* FROM meal_orders mo
+           JOIN patients p ON mo.patient_id = p.id
+           WHERE p.floor=? AND p.active=1 AND mo.order_date=?''',
+        (role, today_str)
+    ).fetchall()
     conn.close()
-    today = date.today().strftime('%Y-%m-%d')
+    orders_map = {}
+    for o in orders:
+        row = dict(o)
+        try:
+            row['options_list'] = json.loads(row.get('options_selected') or '[]')
+        except Exception:
+            row['options_list'] = []
+        orders_map[(o['patient_id'], o['meal_time'])] = row
     return render_template('dieta_nurse.html',
                            patients=patients,
+                           orders_map=orders_map,
                            role=role,
                            role_name=ROLE_NAMES[role],
                            floor_label=FLOOR_LABEL[role],
-                           today=today,
+                           today=today_str,
                            diet_options=DIET_OPTIONS,
                            condition_notes=CONDITION_NOTES,
                            condition_label=CONDITION_LABEL,
                            nurses=NURSES,
                            active_nurse=session.get('nurse_name', ''))
+
+
+@app.route('/api/floor/status')
+def floor_status():
+    redir = nurse_required()
+    if redir: return jsonify({'error': 'unauthorized'}), 403
+    role = session['dieta_role']
+    today_str = date.today().strftime('%Y-%m-%d')
+    conn = get_db()
+    orders = conn.execute(
+        '''SELECT mo.patient_id, mo.meal_time, mo.delivery_status
+           FROM meal_orders mo
+           JOIN patients p ON mo.patient_id = p.id
+           WHERE p.floor=? AND p.active=1 AND mo.order_date=?''',
+        (role, today_str)
+    ).fetchall()
+    conn.close()
+    result = {f"{o['patient_id']}_{o['meal_time']}": (o['delivery_status'] or 'pendiente') for o in orders}
+    return jsonify(result)
 
 
 @app.route('/api/patient/add', methods=['POST'])
@@ -359,6 +403,57 @@ def dieta_cafeteria():
                            condition_notes=CONDITION_NOTES,
                            condition_label=CONDITION_LABEL,
                            floor_label=FLOOR_LABEL)
+
+
+@app.route('/api/order/nurse-received', methods=['POST'])
+def nurse_received():
+    redir = nurse_required()
+    if redir: return jsonify({'error': 'unauthorized'}), 403
+    d = request.json
+    today_str = date.today().strftime('%Y-%m-%d')
+    conn = get_db()
+    existing = conn.execute(
+        'SELECT id FROM meal_orders WHERE patient_id=? AND order_date=? AND meal_time=?',
+        (d['patient_id'], today_str, d['meal_time'])
+    ).fetchone()
+    if existing:
+        conn.execute('UPDATE meal_orders SET nurse_received=1 WHERE id=?', (existing['id'],))
+    else:
+        conn.execute(
+            'INSERT INTO meal_orders (patient_id, order_date, meal_time, nurse_received, options_selected) VALUES (?,?,?,1,?)',
+            (d['patient_id'], today_str, d['meal_time'], '[]')
+        )
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True})
+
+
+@app.route('/api/order/delivery-status', methods=['POST'])
+def update_delivery_status():
+    if session.get('dieta_role') != 'cafeteria':
+        return jsonify({'error': 'unauthorized'}), 403
+    d = request.json
+    status = d['status']  # recibido, en_proceso, en_camino, entregado
+    confirmed = 1 if status == 'entregado' else 0
+    now = datetime.now().isoformat()
+    conn = get_db()
+    existing = conn.execute(
+        'SELECT id FROM meal_orders WHERE patient_id=? AND order_date=? AND meal_time=?',
+        (d['patient_id'], d['date'], d['meal_time'])
+    ).fetchone()
+    if existing:
+        conn.execute(
+            'UPDATE meal_orders SET delivery_status=?, confirmed=?, confirmed_by=?, confirmed_at=? WHERE id=?',
+            (status, confirmed, 'cafeteria', now, existing['id'])
+        )
+    else:
+        conn.execute(
+            'INSERT INTO meal_orders (patient_id, order_date, meal_time, delivery_status, options_selected, confirmed, confirmed_by, confirmed_at) VALUES (?,?,?,?,?,?,?,?)',
+            (d['patient_id'], d['date'], d['meal_time'], status, '[]', confirmed, 'cafeteria', now)
+        )
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True})
 
 
 @app.route('/api/order/save', methods=['POST'])

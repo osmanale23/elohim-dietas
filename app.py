@@ -38,6 +38,17 @@ FLOOR_LABEL = {
     'uci':   'UCI',
 }
 
+NURSES = [
+    'YUSMARI LOPEZ',
+    'ADALGISA CONCEPCION',
+    'KENIA MOORE',
+    'SALDYS BENIGNO',
+    'ALEXANDER MEJIA',
+    'NOEMI GOMEZ',
+    'IRIS ABAD',
+    'EDITH EVANGELISTA',
+]
+
 DIET_OPTIONS = {
     'corriente': {
         'desayuno': [
@@ -211,6 +222,16 @@ def nurse_required():
 
 
 # ─── NURSE VIEW ───────────────────────────────────────────────────────────────
+@app.route('/api/nurse/select', methods=['POST'])
+def select_nurse():
+    if nurse_required(): return jsonify({'error': 'unauthorized'}), 403
+    name = request.json.get('name', '').strip()
+    if name not in NURSES:
+        return jsonify({'error': 'invalid'}), 400
+    session['nurse_name'] = name
+    return jsonify({'ok': True})
+
+
 @app.route('/nurse')
 def dieta_nurse():
     redir = nurse_required()
@@ -230,7 +251,9 @@ def dieta_nurse():
                            today=today,
                            diet_options=DIET_OPTIONS,
                            condition_notes=CONDITION_NOTES,
-                           condition_label=CONDITION_LABEL)
+                           condition_label=CONDITION_LABEL,
+                           nurses=NURSES,
+                           active_nurse=session.get('nurse_name', ''))
 
 
 @app.route('/api/patient/add', methods=['POST'])
@@ -239,9 +262,10 @@ def add_patient():
     d = request.json
     role = session['dieta_role']
     conn = get_db()
+    nurse_name = session.get('nurse_name', role)
     cur = conn.execute(
         'INSERT INTO patients (name, floor, room, diet_type, condition, notes, registered_by) VALUES (?,?,?,?,?,?,?)',
-        (d['name'].strip(), role, d['room'].strip(), d['diet_type'], d.get('condition', 'normal'), d.get('notes', ''), role)
+        (d['name'].strip(), role, d['room'].strip(), d['diet_type'], d.get('condition', 'normal'), d.get('notes', ''), nurse_name)
     )
     pid = cur.lastrowid
     conn.commit()

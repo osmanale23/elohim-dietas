@@ -30,6 +30,27 @@
     font-size:13px; text-decoration:none; transition:background 0.2s;
   }
   .logout-btn:hover { background:rgba(255,255,255,0.25); }
+  /* NURSE SELECTOR */
+  .nurse-bar {
+    background: var(--dark); color:white;
+    padding: 12px 28px; display:flex; align-items:center; gap:14px;
+  }
+  .nurse-label { font-size:12px; opacity:0.7; text-transform:uppercase; letter-spacing:1px; white-space:nowrap; }
+  .nurse-select {
+    background: rgba(255,255,255,0.12); border:1.5px solid rgba(255,255,255,0.25);
+    color:white; padding:8px 14px; border-radius:8px; font-size:14px;
+    font-weight:600; cursor:pointer; outline:none; flex:1; max-width:320px;
+  }
+  .nurse-select option { background:#243B2E; color:white; }
+  .nurse-active {
+    font-size:13px; background:rgba(255,255,255,0.1);
+    padding:6px 14px; border-radius:20px; white-space:nowrap;
+  }
+  .nurse-required-msg {
+    background:#FFF3CD; border:1px solid #FFE082; color:#856404;
+    border-radius:10px; padding:14px 18px; margin-bottom:20px;
+    font-size:13px; display:flex; align-items:center; gap:10px;
+  }
   /* MAIN */
   .main { max-width: 900px; margin: 0 auto; padding: 28px 20px; }
   .top-bar { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; }
@@ -155,13 +176,32 @@
   <a href="/logout" class="logout-btn">Cerrar sesión</a>
 </div>
 
+<!-- NURSE SELECTOR BAR -->
+<div class="nurse-bar">
+  <span class="nurse-label">👩‍⚕️ Enfermera en turno:</span>
+  <select class="nurse-select" id="nurseSelect" onchange="selectNurse(this.value)">
+    <option value="">— Selecciona tu nombre —</option>
+    {% for n in nurses %}
+    <option value="{{ n }}" {% if n == active_nurse %}selected{% endif %}>{{ n }}</option>
+    {% endfor %}
+  </select>
+  {% if active_nurse %}
+  <span class="nurse-active">✓ {{ active_nurse }}</span>
+  {% endif %}
+</div>
+
 <div class="main">
+  {% if not active_nurse %}
+  <div class="nurse-required-msg">
+    ⚠️ <strong>Selecciona tu nombre</strong> en la barra superior antes de registrar pacientes.
+  </div>
+  {% endif %}
   <div class="top-bar">
     <div>
       <div class="section-title">Pacientes Activos</div>
       <div class="count-badge">{{ patients|length }} paciente{% if patients|length != 1 %}s{% endif %} en {{ floor_label }}</div>
     </div>
-    <button class="add-btn" onclick="openAdd()">+ Registrar Paciente</button>
+    <button class="add-btn" onclick="openAdd()" {% if not active_nurse %}style="opacity:0.4;cursor:not-allowed;" title="Selecciona tu nombre primero"{% endif %}>+ Registrar Paciente</button>
   </div>
 
   {% if patients %}
@@ -294,6 +334,15 @@
 <div class="toast" id="toast"></div>
 
 <script>
+async function selectNurse(name) {
+  if (!name) return;
+  const r = await fetch('/api/nurse/select', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({name})
+  });
+  if ((await r.json()).ok) { location.reload(); }
+}
+
 function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');
@@ -301,7 +350,11 @@ function showToast(msg) {
 }
 
 // ADD
-function openAdd() { document.getElementById('addModal').classList.add('active'); }
+function openAdd() {
+  const nurse = document.getElementById('nurseSelect').value;
+  if (!nurse) { showToast('⚠️ Selecciona tu nombre primero'); return; }
+  document.getElementById('addModal').classList.add('active');
+}
 function closeAdd() { document.getElementById('addModal').classList.remove('active'); }
 async function saveAdd() {
   const name = document.getElementById('addName').value.trim();

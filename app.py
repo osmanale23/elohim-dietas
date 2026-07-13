@@ -269,6 +269,13 @@ def add_patient():
         (d['name'].strip(), role, d['room'].strip(), d['diet_type'], d.get('condition', 'normal'), d.get('notes', ''), nurse_name)
     )
     pid = cur.lastrowid
+    # Crear pedido para el tiempo de comida seleccionado
+    meal_time = d.get('meal_time', 'desayuno')
+    today_str = date.today().strftime('%Y-%m-%d')
+    conn.execute(
+        'INSERT INTO meal_orders (patient_id, order_date, meal_time, options_selected, confirmed, extra_notes) VALUES (?,?,?,?,0,?)',
+        (pid, today_str, meal_time, '[]', d.get('notes', ''))
+    )
     conn.commit()
     conn.close()
     return jsonify({'ok': True, 'id': pid})

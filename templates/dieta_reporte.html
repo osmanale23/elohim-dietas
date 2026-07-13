@@ -206,7 +206,7 @@
       <tbody>
         {% for p in patients %}
         <tr>
-          <td>{{ p['created_at'][:10] }}</td>
+          <td>{{ p['created_at'] | fmt_datetime if p['created_at'] else '—' }}</td>
           <td><strong>{{ p['name'] }}</strong></td>
           <td>{{ p['edad'] or '—' }}</td>
           <td>{{ p['sexo'] or '—' }}</td>

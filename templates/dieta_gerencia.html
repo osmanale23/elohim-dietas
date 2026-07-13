@@ -25,17 +25,27 @@
   }
   .main { max-width:1200px; margin:0 auto; padding:24px 20px; }
   /* KPI GRID */
-  .kpi-grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:14px; margin-bottom:24px; }
+  .kpi-grid { display:grid; grid-template-columns:repeat(5, 1fr); gap:12px; margin-bottom:14px; }
+  .kpi-grid-2 { display:grid; grid-template-columns:repeat(5, 1fr); gap:12px; margin-bottom:24px; }
   .kpi {
-    background:white; border-radius:14px; padding:20px;
-    box-shadow:0 2px 8px rgba(0,0,0,0.05); border-top:3px solid transparent;
+    background:white; border-radius:14px; padding:18px 16px;
+    box-shadow:0 2px 8px rgba(0,0,0,0.05); border-top:4px solid transparent;
   }
-  .kpi.green { border-top-color:var(--green); }
-  .kpi.blue  { border-top-color:var(--p5); }
-  .kpi.orange{ border-top-color:#E67E22; }
-  .kpi.red   { border-top-color:var(--uci); }
-  .kpi-num { font-size:32px; font-weight:700; color:var(--dark); }
-  .kpi-label { font-size:12px; color:var(--mid); margin-top:4px; }
+  .kpi.p5   { border-top-color:#2980B9; }
+  .kpi.p6   { border-top-color:#8E44AD; }
+  .kpi.uci  { border-top-color:#C0392B; }
+  .kpi.emg  { border-top-color:#E74C3C; }
+  .kpi.ucin { border-top-color:#6A1B9A; }
+  .kpi.conf { border-top-color:#27AE60; }
+  .kpi.proc { border-top-color:#E67E22; }
+  .kpi.cam  { border-top-color:#D4AC0D; }
+  .kpi.recv { border-top-color:#2980B9; }
+  .kpi.nurs { border-top-color:#4E7C5F; }
+  .kpi-num { font-size:30px; font-weight:800; color:var(--dark); }
+  .kpi-label { font-size:11px; color:var(--mid); margin-top:4px; line-height:1.4; }
+  @media(max-width:900px) {
+    .kpi-grid, .kpi-grid-2 { grid-template-columns:repeat(3,1fr); }
+  }
   /* FILTERS */
   .filters {
     background:white; border-radius:14px; padding:18px 20px;
@@ -117,24 +127,51 @@
 </div>
 
 <div class="main">
-  <!-- KPIs -->
+  <!-- KPIs Fila 1: Pacientes por Unidad -->
   <div class="kpi-grid">
-    <div class="kpi green">
-      <div class="kpi-num">{{ all_active }}</div>
-      <div class="kpi-label">Pacientes internados activos</div>
+    <div class="kpi p5">
+      <div class="kpi-num">{{ floor_counts.get('piso5', 0) }}</div>
+      <div class="kpi-label">🏥 Pacientes Activos<br>Piso 5</div>
     </div>
-    <div class="kpi blue">
-      <div class="kpi-num">{{ confirmed_today }}</div>
-      <div class="kpi-label">Comidas confirmadas hoy</div>
+    <div class="kpi p6">
+      <div class="kpi-num">{{ floor_counts.get('piso6', 0) }}</div>
+      <div class="kpi-label">🏥 Pacientes Activos<br>Piso 6</div>
     </div>
-    <div class="kpi orange">
-      <div class="kpi-num">{{ pending_today }}</div>
-      <div class="kpi-label">Comidas pendientes hoy</div>
+    <div class="kpi uci">
+      <div class="kpi-num">{{ floor_counts.get('uci', 0) }}</div>
+      <div class="kpi-label">🏥 Pacientes Activos<br>UCI</div>
     </div>
-    <div class="kpi red">
-      {% set uci_count = patients|selectattr('floor','equalto','uci')|list|length %}
-      <div class="kpi-num">{{ uci_count }}</div>
-      <div class="kpi-label">Pacientes en UCI</div>
+    <div class="kpi emg">
+      <div class="kpi-num">{{ floor_counts.get('emergencia', 0) }}</div>
+      <div class="kpi-label">🏥 Pacientes Activos<br>Emergencia</div>
+    </div>
+    <div class="kpi ucin">
+      <div class="kpi-num">{{ floor_counts.get('ucin', 0) }}</div>
+      <div class="kpi-label">🏥 Pacientes Activos<br>UCIN</div>
+    </div>
+  </div>
+
+  <!-- KPIs Fila 2: Estados de Comidas Hoy -->
+  <div class="kpi-grid-2">
+    <div class="kpi conf">
+      <div class="kpi-num">{{ status_counts.get('entregado', 0) }}</div>
+      <div class="kpi-label">✅ Comidas<br>Entregadas hoy</div>
+    </div>
+    <div class="kpi proc">
+      <div class="kpi-num">{{ status_counts.get('en_proceso', 0) }}</div>
+      <div class="kpi-label">👨‍🍳 Comidas<br>En Proceso</div>
+    </div>
+    <div class="kpi cam">
+      <div class="kpi-num">{{ status_counts.get('en_camino', 0) }}</div>
+      <div class="kpi-label">🚀 Comidas<br>En Camino</div>
+    </div>
+    <div class="kpi recv">
+      <div class="kpi-num">{{ status_counts.get('recibido', 0) }}</div>
+      <div class="kpi-label">📥 Pedidos<br>Recibidos en Cafetería</div>
+    </div>
+    <div class="kpi nurs">
+      <div class="kpi-num">{{ status_counts.get('nurse_received', 0) }}</div>
+      <div class="kpi-label">🏥 Comidas Confirmadas<br>por Enfermería</div>
     </div>
   </div>
 
@@ -169,6 +206,7 @@
           <th>Piso / Hab.</th>
           <th>Dieta</th>
           <th>Condición</th>
+          <th>Registrado</th>
           <th>Desayuno (7:30am)</th>
           <th>Almuerzo (12:30pm)</th>
           <th>Cena (6:30pm)</th>
@@ -199,6 +237,12 @@
                 <span class="badge cond-{{ p.condition }}">{{ condition_label[p.condition] }}</span>
               {% endif %}
             </td>
+            <td style="font-size:11px;color:var(--mid);white-space:nowrap;">
+              {% if p.created_at %}
+                {{ p.created_at[:10] }}<br>
+                <strong style="color:var(--dark);">{{ p.created_at | fmt_time }}</strong>
+              {% else %}—{% endif %}
+            </td>
             {% for meal_key, _, _ in meal_times %}
             {% set order = orders_map.get((p.id, meal_key)) %}
             <td>
@@ -223,7 +267,7 @@
           {% endfor %}
         {% else %}
           <tr class="empty-row">
-            <td colspan="7">
+            <td colspan="8">
               <div style="font-size:32px;margin-bottom:10px;">🛏️</div>
               No hay pacientes registrados para este filtro.
             </td>

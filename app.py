@@ -154,6 +154,30 @@ MEAL_TIMES = [
 ]
 
 
+# ─── TEMPLATE FILTERS ───────────────────────────────────────────────────────
+@app.template_filter('fmt_time')
+def fmt_time(value):
+    """'2026-07-14T02:13:45' → '2:13 AM'"""
+    if not value:
+        return '—'
+    try:
+        dt = datetime.fromisoformat(str(value))
+        return dt.strftime('%-I:%M %p')
+    except Exception:
+        return str(value)[11:16]
+
+@app.template_filter('fmt_datetime')
+def fmt_datetime(value):
+    """'2026-07-14T02:13:45' → '2026-07-14  2:13 AM'"""
+    if not value:
+        return '—'
+    try:
+        dt = datetime.fromisoformat(str(value))
+        return dt.strftime('%Y-%m-%d  %-I:%M %p')
+    except Exception:
+        return str(value)[:16].replace('T', ' ')
+
+
 # ─── DATABASE ───────────────────────────────────────────────────────────────
 def get_db():
     conn = sqlite3.connect(DB_PATH)
@@ -335,10 +359,11 @@ def add_patient():
     role = session['dieta_role']
     conn = get_db()
     nurse_name = session.get('nurse_name', role)
+    now_str = datetime.now().isoformat(timespec='seconds')
     cur = conn.execute(
-        'INSERT INTO patients (name, floor, room, diet_type, condition, edad, sexo, notes, registered_by) VALUES (?,?,?,?,?,?,?,?,?)',
+        'INSERT INTO patients (name, floor, room, diet_type, condition, edad, sexo, notes, registered_by, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)',
         (d['name'].strip(), role, d['room'].strip(), d['diet_type'], d.get('condition', 'normal'),
-         d.get('edad'), d.get('sexo', 'masculino'), d.get('notes', ''), nurse_name)
+         d.get('edad'), d.get('sexo', 'masculino'), d.get('notes', ''), nurse_name, now_str)
     )
     pid = cur.lastrowid
     meal_time = d.get('meal_time', 'desayuno')
@@ -495,10 +520,21 @@ def dieta_gerencia():
     else:
         patients = conn.execute('SELECT * FROM patients WHERE active=1 AND floor=? ORDER BY room', (floor_filter,)).fetchall()
     orders = conn.execute('SELECT * FROM meal_orders WHERE order_date=?', (today,)).fetchall()
-    # Stats
-    all_active = conn.execute('SELECT COUNT(*) FROM patients WHERE active=1').fetchone()[0]
-    confirmed_today = conn.execute('SELECT COUNT(*) FROM meal_orders WHERE order_date=? AND confirmed=1', (today,)).fetchone()[0]
-    pending_today = (all_active * 3) - confirmed_today
+    # Pacientes activos por piso
+    floor_counts = {}
+    for fk in FLOOR_LABEL:
+        floor_counts[fk] = conn.execute(
+            'SELECT COUNT(*) FROM patients WHERE active=1 AND floor=?', (fk,)
+        ).fetchone()[0]
+    # Conteos por estado de entrega
+    status_counts = {}
+    for st in ('recibido', 'en_proceso', 'en_camino', 'entregado'):
+        status_counts[st] = conn.execute(
+            "SELECT COUNT(*) FROM meal_orders WHERE order_date=? AND delivery_status=?", (today, st)
+        ).fetchone()[0]
+    status_counts['nurse_received'] = conn.execute(
+        "SELECT COUNT(*) FROM meal_orders WHERE order_date=? AND nurse_received=1", (today,)
+    ).fetchone()[0]
     conn.close()
     orders_map = {(o['patient_id'], o['meal_time']): dict(o) for o in orders}
     return render_template('dieta_gerencia.html',
@@ -506,9 +542,8 @@ def dieta_gerencia():
                            orders_map=orders_map,
                            today=today,
                            floor_filter=floor_filter,
-                           all_active=all_active,
-                           confirmed_today=confirmed_today,
-                           pending_today=max(0, pending_today),
+                           floor_counts=floor_counts,
+                           status_counts=status_counts,
                            meal_times=MEAL_TIMES,
                            diet_options=DIET_OPTIONS,
                            condition_notes=CONDITION_NOTES,

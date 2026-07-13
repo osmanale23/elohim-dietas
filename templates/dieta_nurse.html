@@ -46,6 +46,18 @@
     font-size:13px; background:rgba(255,255,255,0.1);
     padding:6px 14px; border-radius:20px; white-space:nowrap;
   }
+  .nurse-other-input {
+    background: rgba(255,255,255,0.12); border:1.5px solid rgba(255,255,255,0.25);
+    color:white; padding:8px 14px; border-radius:8px; font-size:14px;
+    font-weight:600; outline:none; flex:1; max-width:260px; display:none;
+  }
+  .nurse-other-input::placeholder { color:rgba(255,255,255,0.45); }
+  .nurse-confirm-btn {
+    background:var(--green-l); border:none; color:white;
+    padding:8px 16px; border-radius:8px; font-size:13px; font-weight:700;
+    cursor:pointer; display:none; white-space:nowrap;
+  }
+  .nurse-confirm-btn:hover { background:var(--green); }
   .nurse-required-msg {
     background:#FFF3CD; border:1px solid #FFE082; color:#856404;
     border-radius:10px; padding:14px 18px; margin-bottom:20px;
@@ -179,12 +191,15 @@
 <!-- NURSE SELECTOR BAR -->
 <div class="nurse-bar">
   <span class="nurse-label">👩‍⚕️ Enfermera en turno:</span>
-  <select class="nurse-select" id="nurseSelect" onchange="selectNurse(this.value)">
+  <select class="nurse-select" id="nurseSelect" onchange="onNurseChange(this.value)">
     <option value="">— Selecciona tu nombre —</option>
     {% for n in nurses %}
     <option value="{{ n }}" {% if n == active_nurse %}selected{% endif %}>{{ n }}</option>
     {% endfor %}
+    <option value="__otra__">✏️ Otra (escribir nombre)</option>
   </select>
+  <input class="nurse-other-input" id="nurseOtherInput" type="text" placeholder="Nombre completo...">
+  <button class="nurse-confirm-btn" id="nurseConfirmBtn" onclick="confirmOtherNurse()">Confirmar</button>
   {% if active_nurse %}
   <span class="nurse-active">✓ {{ active_nurse }}</span>
   {% endif %}
@@ -231,10 +246,7 @@
       <div style="font-size:12px;color:var(--mid);margin-bottom:12px;font-style:italic;">📝 {{ p.notes }}</div>
       {% endif %}
       <div class="card-actions">
-        <button class="edit-btn" onclick="openEdit({{ p.id }}, '{{ p.name }}', '{{ p.room }}', '{{ p.diet_type }}', '{{ p.condition }}', `{{ p.notes }}`)">
-          ✏️ Editar
-        </button>
-        <button class="discharge-btn" onclick="discharge({{ p.id }}, '{{ p.name }}')">Alta</button>
+        <button class="discharge-btn" style="flex:1;" onclick="discharge({{ p.id }}, '{{ p.name }}')">🏥 Dar de Alta</button>
       </div>
     </div>
     {% endfor %}
@@ -260,13 +272,32 @@
       <label>Número de Habitación</label>
       <input type="text" id="addRoom" placeholder="Ej: 501">
     </div>
-    <div class="form-group">
-      <label>Tiempo de Comida</label>
-      <select id="addMealTime">
-        <option value="desayuno">🌅 Desayuno — 7:30 AM</option>
-        <option value="almuerzo">☀️ Almuerzo — 12:30 PM</option>
-        <option value="cena">🌙 Cena — 6:30 PM</option>
-      </select>
+    <div style="display:flex;gap:12px;">
+      <div class="form-group" style="flex:1;">
+        <label>Edad</label>
+        <input type="number" id="addEdad" min="0" max="120" placeholder="Ej: 45">
+      </div>
+      <div class="form-group" style="flex:1;">
+        <label>Sexo</label>
+        <select id="addSexo">
+          <option value="masculino">♂ Masculino</option>
+          <option value="femenino">♀ Femenino</option>
+        </select>
+      </div>
+    </div>
+    <div style="display:flex;gap:12px;">
+      <div class="form-group" style="flex:1;">
+        <label>Tiempo de Comida</label>
+        <select id="addMealTime">
+          <option value="desayuno">🌅 Desayuno — 7:30 AM</option>
+          <option value="almuerzo">☀️ Almuerzo — 12:30 PM</option>
+          <option value="cena">🌙 Cena — 6:30 PM</option>
+        </select>
+      </div>
+      <div class="form-group" style="flex:1;">
+        <label>Fecha de la Comida</label>
+        <input type="date" id="addMealDate">
+      </div>
     </div>
     <div class="form-group">
       <label>Tipo de Dieta</label>
@@ -297,51 +328,30 @@
   </div>
 </div>
 
-<!-- EDIT MODAL -->
-<div class="modal-overlay" id="editModal">
-  <div class="modal">
-    <div class="modal-title">✏️ Editar Paciente</div>
-    <input type="hidden" id="editId">
-    <div class="form-group">
-      <label>Paciente</label>
-      <input type="text" id="editName" readonly style="background:#f5f5f5;color:#888;">
-    </div>
-    <div class="form-group">
-      <label>Habitación</label>
-      <input type="text" id="editRoom" readonly style="background:#f5f5f5;color:#888;">
-    </div>
-    <div class="form-group">
-      <label>Tipo de Dieta</label>
-      <select id="editDiet">
-        <option value="corriente">Dieta Corriente</option>
-        <option value="blanda">Dieta Blanda / Suave</option>
-        <option value="liquida">Dieta Líquida</option>
-      </select>
-    </div>
-    <div class="form-group">
-      <label>Condición Especial</label>
-      <select id="editCondition">
-        <option value="normal">Sin condición especial</option>
-        <option value="diabetico">Diabético</option>
-        <option value="renal">Insuficiencia Renal</option>
-        <option value="disfagia">Disfagia</option>
-        <option value="cardiopatia">Cardiopatía</option>
-      </select>
-    </div>
-    <div class="form-group">
-      <label>Notas adicionales</label>
-      <textarea id="editNotes"></textarea>
-    </div>
-    <div class="modal-actions">
-      <button class="cancel-btn" onclick="closeEdit()">Cancelar</button>
-      <button class="save-btn" onclick="saveEdit()">Guardar cambios</button>
-    </div>
-  </div>
-</div>
 
 <div class="toast" id="toast"></div>
 
 <script>
+function onNurseChange(val) {
+  const otherInput = document.getElementById('nurseOtherInput');
+  const confirmBtn = document.getElementById('nurseConfirmBtn');
+  if (val === '__otra__') {
+    otherInput.style.display = 'block';
+    confirmBtn.style.display = 'block';
+    otherInput.focus();
+  } else {
+    otherInput.style.display = 'none';
+    confirmBtn.style.display = 'none';
+    if (val) selectNurse(val);
+  }
+}
+
+async function confirmOtherNurse() {
+  const name = document.getElementById('nurseOtherInput').value.trim().toUpperCase();
+  if (!name) { showToast('⚠️ Escribe el nombre'); return; }
+  await selectNurse(name);
+}
+
 async function selectNurse(name) {
   if (!name) return;
   const r = await fetch('/api/nurse/select', {
@@ -361,6 +371,8 @@ function showToast(msg) {
 function openAdd() {
   const nurse = document.getElementById('nurseSelect').value;
   if (!nurse) { showToast('⚠️ Selecciona tu nombre primero'); return; }
+  // Fecha por defecto = hoy
+  document.getElementById('addMealDate').value = new Date().toISOString().slice(0,10);
   document.getElementById('addModal').classList.add('active');
 }
 function closeAdd() { document.getElementById('addModal').classList.remove('active'); }
@@ -368,41 +380,21 @@ async function saveAdd() {
   const name = document.getElementById('addName').value.trim();
   const room = document.getElementById('addRoom').value.trim();
   if (!name || !room) { showToast('Completa nombre y habitación'); return; }
+  const mealDate = document.getElementById('addMealDate').value || new Date().toISOString().slice(0,10);
   const r = await fetch('/api/patient/add', {
     method: 'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({
       name, room,
+      edad: document.getElementById('addEdad').value || null,
+      sexo: document.getElementById('addSexo').value,
       meal_time: document.getElementById('addMealTime').value,
+      meal_date: mealDate,
       diet_type: document.getElementById('addDiet').value,
       condition: document.getElementById('addCondition').value,
       notes: document.getElementById('addNotes').value
     })
   });
   if ((await r.json()).ok) { showToast('Paciente registrado ✓'); setTimeout(()=>location.reload(), 1000); }
-}
-
-// EDIT
-function openEdit(id, name, room, diet, cond, notes) {
-  document.getElementById('editId').value = id;
-  document.getElementById('editName').value = name;
-  document.getElementById('editRoom').value = room;
-  document.getElementById('editDiet').value = diet;
-  document.getElementById('editCondition').value = cond;
-  document.getElementById('editNotes').value = notes;
-  document.getElementById('editModal').classList.add('active');
-}
-function closeEdit() { document.getElementById('editModal').classList.remove('active'); }
-async function saveEdit() {
-  const id = document.getElementById('editId').value;
-  const r = await fetch(`/api/patient/${id}/update`, {
-    method: 'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({
-      diet_type: document.getElementById('editDiet').value,
-      condition: document.getElementById('editCondition').value,
-      notes: document.getElementById('editNotes').value
-    })
-  });
-  if ((await r.json()).ok) { showToast('Actualizado ✓'); setTimeout(()=>location.reload(), 1000); }
 }
 
 // DISCHARGE

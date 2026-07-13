@@ -17,25 +17,31 @@ app.secret_key = os.environ.get('SECRET_KEY', 'dieta-elohim-2025')
 DB_PATH = os.environ.get('DIETA_DB', 'dieta.db')
 
 PASSWORDS = {
-    'piso5':     os.environ.get('PASS_PISO5',  'Piso5Elohim'),
-    'piso6':     os.environ.get('PASS_PISO6',  'Piso6Elohim'),
-    'uci':       os.environ.get('PASS_UCI',    'UCIElohim'),
-    'cafeteria': os.environ.get('PASS_CAF',    'CafetElohim'),
-    'gerencia':  os.environ.get('PASS_GER',    'GerenciaElohim'),
+    'piso5':       os.environ.get('PASS_PISO5',  'Piso5Elohim'),
+    'piso6':       os.environ.get('PASS_PISO6',  'Piso6Elohim'),
+    'uci':         os.environ.get('PASS_UCI',    'UCIElohim'),
+    'emergencia':  os.environ.get('PASS_EMG',    'EmergenciaElohim'),
+    'ucin':        os.environ.get('PASS_UCIN',   'UCINElohim'),
+    'cafeteria':   os.environ.get('PASS_CAF',    'CafetElohim'),
+    'gerencia':    os.environ.get('PASS_GER',    'GerenciaElohim'),
 }
 
 ROLE_NAMES = {
-    'piso5':     'Enfermería — Piso 5',
-    'piso6':     'Enfermería — Piso 6',
-    'uci':       'Enfermería — UCI',
-    'cafeteria': 'Cafetería',
-    'gerencia':  'Gerencia',
+    'piso5':      'Enfermería — Piso 5',
+    'piso6':      'Enfermería — Piso 6',
+    'uci':        'Enfermería — UCI',
+    'emergencia': 'Enfermería — Emergencia',
+    'ucin':       'Enfermería — UCIN',
+    'cafeteria':  'Cafetería',
+    'gerencia':   'Gerencia',
 }
 
 FLOOR_LABEL = {
-    'piso5': 'Piso 5',
-    'piso6': 'Piso 6',
-    'uci':   'UCI',
+    'piso5':      'Piso 5',
+    'piso6':      'Piso 6',
+    'uci':        'UCI',
+    'emergencia': 'Emergencia',
+    'ucin':       'UCIN',
 }
 
 NURSES = [
@@ -48,6 +54,10 @@ NURSES = [
     'IRIS ABAD',
     'EDITH EVANGELISTA',
     'MILENA FREITES',
+    'DECENA DOMINGA',
+    'BONIFACIA BELTRAN',
+    'KATERIN MEDINA',
+    'NARDELIS RODRIGUEZ',
 ]
 
 DIET_OPTIONS = {
@@ -155,33 +165,48 @@ def init_db():
     conn = get_db()
     conn.executescript('''
         CREATE TABLE IF NOT EXISTS patients (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            name        TEXT NOT NULL,
-            floor       TEXT NOT NULL,
-            room        TEXT NOT NULL,
-            diet_type   TEXT NOT NULL DEFAULT 'corriente',
-            condition   TEXT NOT NULL DEFAULT 'normal',
-            notes       TEXT DEFAULT '',
-            active      INTEGER DEFAULT 1,
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            name          TEXT NOT NULL,
+            floor         TEXT NOT NULL,
+            room          TEXT NOT NULL,
+            diet_type     TEXT NOT NULL DEFAULT 'corriente',
+            condition     TEXT NOT NULL DEFAULT 'normal',
+            edad          INTEGER,
+            sexo          TEXT DEFAULT 'masculino',
+            notes         TEXT DEFAULT '',
+            active        INTEGER DEFAULT 1,
             registered_by TEXT,
-            created_at  TEXT DEFAULT CURRENT_TIMESTAMP,
-            updated_at  TEXT DEFAULT CURRENT_TIMESTAMP
+            created_at    TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at    TEXT DEFAULT CURRENT_TIMESTAMP
         );
 
         CREATE TABLE IF NOT EXISTS meal_orders (
-            id              INTEGER PRIMARY KEY AUTOINCREMENT,
-            patient_id      INTEGER NOT NULL,
-            order_date      TEXT NOT NULL,
-            meal_time       TEXT NOT NULL,
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            patient_id       INTEGER NOT NULL,
+            order_date       TEXT NOT NULL,
+            meal_date        TEXT,
+            meal_time        TEXT NOT NULL,
             options_selected TEXT DEFAULT '[]',
-            confirmed       INTEGER DEFAULT 0,
-            confirmed_by    TEXT,
-            confirmed_at    TEXT,
-            extra_notes     TEXT DEFAULT '',
+            confirmed        INTEGER DEFAULT 0,
+            confirmed_by     TEXT,
+            confirmed_at     TEXT,
+            extra_notes      TEXT DEFAULT '',
             FOREIGN KEY (patient_id) REFERENCES patients(id)
         );
     ''')
     conn.commit()
+    # Migraciones: agregar columnas nuevas si no existen
+    for col, defn in [('edad', 'INTEGER'), ('sexo', "TEXT DEFAULT 'masculino'")]:
+        try:
+            conn.execute(f'ALTER TABLE patients ADD COLUMN {col} {defn}')
+            conn.commit()
+        except Exception:
+            pass
+    try:
+        conn.execute('ALTER TABLE meal_orders ADD COLUMN meal_date TEXT')
+        conn.commit()
+    except Exception:
+        pass
     conn.close()
 
 
@@ -215,9 +240,11 @@ def dieta_logout():
     return redirect(url_for('dieta_login'))
 
 
+NURSE_ROLES = ('piso5', 'piso6', 'uci', 'emergencia', 'ucin')
+
 def nurse_required():
     role = session.get('dieta_role')
-    if role not in ('piso5', 'piso6', 'uci'):
+    if role not in NURSE_ROLES:
         return redirect(url_for('dieta_login'))
     return None
 
@@ -227,7 +254,7 @@ def nurse_required():
 def select_nurse():
     if nurse_required(): return jsonify({'error': 'unauthorized'}), 403
     name = request.json.get('name', '').strip()
-    if name not in NURSES:
+    if not name:
         return jsonify({'error': 'invalid'}), 400
     session['nurse_name'] = name
     return jsonify({'ok': True})
@@ -265,19 +292,22 @@ def add_patient():
     conn = get_db()
     nurse_name = session.get('nurse_name', role)
     cur = conn.execute(
-        'INSERT INTO patients (name, floor, room, diet_type, condition, notes, registered_by) VALUES (?,?,?,?,?,?,?)',
-        (d['name'].strip(), role, d['room'].strip(), d['diet_type'], d.get('condition', 'normal'), d.get('notes', ''), nurse_name)
+        'INSERT INTO patients (name, floor, room, diet_type, condition, edad, sexo, notes, registered_by) VALUES (?,?,?,?,?,?,?,?,?)',
+        (d['name'].strip(), role, d['room'].strip(), d['diet_type'], d.get('condition', 'normal'),
+         d.get('edad'), d.get('sexo', 'masculino'), d.get('notes', ''), nurse_name)
     )
     pid = cur.lastrowid
-    # Crear pedido para el tiempo de comida seleccionado
     meal_time = d.get('meal_time', 'desayuno')
     today_str = date.today().strftime('%Y-%m-%d')
+    meal_date = d.get('meal_date', today_str)
     conn.execute(
-        'INSERT INTO meal_orders (patient_id, order_date, meal_time, options_selected, confirmed, extra_notes) VALUES (?,?,?,?,0,?)',
-        (pid, today_str, meal_time, '[]', d.get('notes', ''))
+        'INSERT INTO meal_orders (patient_id, order_date, meal_date, meal_time, options_selected, confirmed, extra_notes) VALUES (?,?,?,?,?,0,?)',
+        (pid, today_str, meal_date, meal_time, '[]', d.get('notes', ''))
     )
     conn.commit()
     conn.close()
+    # Auto-limpiar sesión de enfermera para obligar re-selección
+    session.pop('nurse_name', None)
     return jsonify({'ok': True, 'id': pid})
 
 
@@ -389,6 +419,47 @@ def dieta_gerencia():
                            condition_notes=CONDITION_NOTES,
                            condition_label=CONDITION_LABEL,
                            floor_label=FLOOR_LABEL)
+
+
+# ─── REPORTE GERENCIA ─────────────────────────────────────────────────────────
+@app.route('/gerencia/reporte')
+def gerencia_reporte():
+    if session.get('dieta_role') != 'gerencia':
+        return redirect(url_for('dieta_login'))
+    today_str = date.today().strftime('%Y-%m-%d')
+    inicio = request.args.get('inicio', today_str)
+    fin    = request.args.get('fin',    today_str)
+    conn = get_db()
+    patients = conn.execute(
+        "SELECT * FROM patients WHERE DATE(created_at) BETWEEN ? AND ? ORDER BY floor, created_at",
+        (inicio, fin)
+    ).fetchall()
+    orders = conn.execute(
+        '''SELECT mo.*, p.name as patient_name, p.floor, p.room, p.diet_type,
+                  p.condition, p.edad, p.sexo, p.registered_by
+           FROM meal_orders mo
+           JOIN patients p ON mo.patient_id = p.id
+           WHERE mo.order_date BETWEEN ? AND ?
+           ORDER BY mo.order_date, p.floor, mo.meal_time''',
+        (inicio, fin)
+    ).fetchall()
+    # Estadísticas
+    total_pacientes = len(patients)
+    total_pedidos   = len(orders)
+    confirmados     = sum(1 for o in orders if o['confirmed'])
+    conn.close()
+    return render_template('dieta_reporte.html',
+                           patients=patients,
+                           orders=orders,
+                           inicio=inicio,
+                           fin=fin,
+                           total_pacientes=total_pacientes,
+                           total_pedidos=total_pedidos,
+                           confirmados=confirmados,
+                           now=datetime.now().strftime('%Y-%m-%d %H:%M'),
+                           floor_label=FLOOR_LABEL,
+                           condition_label=CONDITION_LABEL,
+                           MEAL_TIMES=MEAL_TIMES)
 
 
 # Inicializar DB al arrancar (gunicorn o directo)

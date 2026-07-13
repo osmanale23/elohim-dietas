@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Reporte Dietas — Centro Médico Elohim</title>
+<style>
+  @media print {
+    .no-print { display: none !important; }
+    body { font-size: 12px; }
+    .page-break { page-break-before: always; }
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: 'Segoe UI', sans-serif; background: #F7F3EE; color: #1a1a1a; }
+  .header {
+    background: #243B2E; color: white;
+    padding: 24px 40px; display: flex; align-items: center; justify-content: space-between;
+  }
+  .header-title { font-size: 22px; font-weight: 700; }
+  .header-sub { font-size: 13px; opacity: 0.75; margin-top: 4px; }
+  .header-dates { text-align: right; font-size: 13px; opacity: 0.85; }
+  .controls {
+    background: white; padding: 20px 40px; border-bottom: 1px solid #DDD5C8;
+    display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
+  }
+  .controls label { font-size: 12px; color: #4A6050; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
+  .controls input[type="date"] {
+    padding: 8px 12px; border: 1.5px solid #DDD5C8; border-radius: 8px;
+    font-size: 14px; color: #243B2E; background: #F7F3EE;
+  }
+  .btn {
+    padding: 9px 20px; border-radius: 8px; border: none;
+    font-size: 13px; font-weight: 700; cursor: pointer;
+  }
+  .btn-green { background: #4E7C5F; color: white; }
+  .btn-green:hover { background: #243B2E; }
+  .btn-print { background: #EEF6F0; color: #4E7C5F; border: 1.5px solid #7FAE8E; }
+  .btn-print:hover { background: #D1E8DA; }
+  .content { max-width: 1100px; margin: 0 auto; padding: 32px 20px; }
+  /* Stats */
+  .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 32px; }
+  .stat-card {
+    background: white; border-radius: 14px; padding: 20px 24px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06); text-align: center;
+    border-top: 4px solid #4E7C5F;
+  }
+  .stat-num { font-size: 36px; font-weight: 800; color: #4E7C5F; }
+  .stat-label { font-size: 12px; color: #4A6050; text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; }
+  /* Section */
+  .section { margin-bottom: 36px; }
+  .section-title {
+    font-size: 16px; font-weight: 700; color: #243B2E;
+    border-left: 4px solid #4E7C5F; padding-left: 12px; margin-bottom: 16px;
+  }
+  /* Table */
+  table { width: 100%; border-collapse: collapse; background: white;
+          border-radius: 12px; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+  th {
+    background: #243B2E; color: white; padding: 11px 14px;
+    font-size: 11px; text-transform: uppercase; letter-spacing: 1px; text-align: left;
+  }
+  td { padding: 10px 14px; font-size: 13px; border-bottom: 1px solid #F0EAE2; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #F7FBF8; }
+  .badge {
+    display: inline-block; padding: 2px 8px; border-radius: 20px;
+    font-size: 11px; font-weight: 700;
+  }
+  .diet-corriente { background:#E8F5E9; color:#2E7D32; }
+  .diet-blanda    { background:#FFF8E1; color:#F57F17; }
+  .diet-liquida   { background:#E3F2FD; color:#1565C0; }
+  .cond-diabetico  { background:#FFF3E0; color:#E65100; }
+  .cond-renal      { background:#FCE4EC; color:#B71C1C; }
+  .cond-disfagia   { background:#F3E5F5; color:#6A1B9A; }
+  .cond-cardiopatia{ background:#FCE4EC; color:#B71C1C; }
+  .conf-yes { color: #2E7D32; font-weight: 700; }
+  .conf-no  { color: #C0392B; font-weight: 700; }
+  .floor-emergencia { color: #C0392B; font-weight: 700; }
+  .floor-ucin       { color: #6A1B9A; font-weight: 700; }
+  .footer { text-align: center; color: #888; font-size: 11px; padding: 24px; margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <div class="header-title">📋 Reporte de Dietas — Centro Médico Elohim</div>
+    <div class="header-sub">Sistema de Gestión Alimentaria</div>
+  </div>
+  <div class="header-dates">
+    Período: <strong>{{ inicio }}</strong> al <strong>{{ fin }}</strong><br>
+    Generado: {{ now }}
+  </div>
+</div>
+
+<div class="controls no-print">
+  <div>
+    <label>Desde</label><br>
+    <input type="date" id="inputInicio" value="{{ inicio }}">
+  </div>
+  <div>
+    <label>Hasta</label><br>
+    <input type="date" id="inputFin" value="{{ fin }}">
+  </div>
+  <button class="btn btn-green" onclick="generarReporte()">🔄 Generar</button>
+  <button class="btn btn-print" onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>
+  <a href="/gerencia" style="text-decoration:none;">
+    <button class="btn" style="background:#F2F2F2;color:#555;">← Volver</button>
+  </a>
+</div>
+
+<div class="content">
+  <!-- STATS -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-num">{{ total_pacientes }}</div>
+      <div class="stat-label">Pacientes registrados</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num">{{ total_pedidos }}</div>
+      <div class="stat-label">Pedidos realizados</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num">{{ confirmados }}</div>
+      <div class="stat-label">Entregas confirmadas</div>
+    </div>
+  </div>
+
+  <!-- PEDIDOS -->
+  <div class="section">
+    <div class="section-title">📝 Pedidos / Reportes del Período</div>
+    {% if orders %}
+    <table>
+      <thead>
+        <tr>
+          <th>Fecha Pedido</th>
+          <th>Fecha Comida</th>
+          <th>Paciente</th>
+          <th>Edad</th>
+          <th>Sexo</th>
+          <th>Unidad</th>
+          <th>Hab.</th>
+          <th>Dieta</th>
+          <th>Condición</th>
+          <th>Tiempo</th>
+          <th>Entregado</th>
+          <th>Registrado por</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for o in orders %}
+        <tr>
+          <td>{{ o['order_date'] }}</td>
+          <td>{{ o['meal_date'] or o['order_date'] }}</td>
+          <td><strong>{{ o['patient_name'] }}</strong></td>
+          <td>{{ o['edad'] or '—' }}</td>
+          <td>{{ o['sexo'] or '—' }}</td>
+          <td class="floor-{{ o['floor'] }}">{{ floor_label.get(o['floor'], o['floor']) }}</td>
+          <td>{{ o['room'] }}</td>
+          <td><span class="badge diet-{{ o['diet_type'] }}">
+            {% if o['diet_type'] == 'corriente' %}Corriente
+            {% elif o['diet_type'] == 'blanda' %}Blanda
+            {% else %}Líquida{% endif %}
+          </span></td>
+          <td>
+            {% if o['condition'] and o['condition'] != 'normal' %}
+            <span class="badge cond-{{ o['condition'] }}">{{ condition_label.get(o['condition'], o['condition']) }}</span>
+            {% else %}—{% endif %}
+          </td>
+          <td>
+            {% for key, label, hora in MEAL_TIMES %}
+              {% if key == o['meal_time'] %}{{ label }} ({{ hora }}){% endif %}
+            {% endfor %}
+          </td>
+          <td class="{{ 'conf-yes' if o['confirmed'] else 'conf-no' }}">
+            {{ '✓ Sí' if o['confirmed'] else '✗ No' }}
+          </td>
+          <td>{{ o['registered_by'] or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p style="text-align:center;color:#888;padding:32px;">No hay pedidos en este período.</p>
+    {% endif %}
+  </div>
+
+  <!-- PACIENTES REGISTRADOS -->
+  <div class="section page-break">
+    <div class="section-title">🛏️ Pacientes Registrados en el Período</div>
+    {% if patients %}
+    <table>
+      <thead>
+        <tr>
+          <th>Fecha Registro</th>
+          <th>Nombre</th>
+          <th>Edad</th>
+          <th>Sexo</th>
+          <th>Unidad</th>
+          <th>Habitación</th>
+          <th>Dieta</th>
+          <th>Condición</th>
+          <th>Enfermera</th>
+          <th>Estado</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in patients %}
+        <tr>
+          <td>{{ p['created_at'][:10] }}</td>
+          <td><strong>{{ p['name'] }}</strong></td>
+          <td>{{ p['edad'] or '—' }}</td>
+          <td>{{ p['sexo'] or '—' }}</td>
+          <td class="floor-{{ p['floor'] }}">{{ floor_label.get(p['floor'], p['floor']) }}</td>
+          <td>{{ p['room'] }}</td>
+          <td><span class="badge diet-{{ p['diet_type'] }}">
+            {% if p['diet_type'] == 'corriente' %}Corriente
+            {% elif p['diet_type'] == 'blanda' %}Blanda
+            {% else %}Líquida{% endif %}
+          </span></td>
+          <td>
+            {% if p['condition'] and p['condition'] != 'normal' %}
+            <span class="badge cond-{{ p['condition'] }}">{{ condition_label.get(p['condition'], p['condition']) }}</span>
+            {% else %}—{% endif %}
+          </td>
+          <td>{{ p['registered_by'] or '—' }}</td>
+          <td>{{ '✓ Activo' if p['active'] else 'Alta' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p style="text-align:center;color:#888;padding:32px;">No hay pacientes registrados en este período.</p>
+    {% endif %}
+  </div>
+</div>
+
+<div class="footer">
+  Centro Médico Elohim — Sistema de Dietas &nbsp;|&nbsp; Reporte generado automáticamente
+</div>
+
+<script>
+function generarReporte() {
+  const inicio = document.getElementById('inputInicio').value;
+  const fin = document.getElementById('inputFin').value;
+  if (!inicio || !fin) { alert('Selecciona ambas fechas'); return; }
+  window.location.href = `/gerencia/reporte?inicio=${inicio}&fin=${fin}`;
+}
+</script>
+</body>
+</html>

@@ -5,7 +5,8 @@ Gestión de alimentación para pacientes internados (Piso 5, Piso 6, UCI)
 
 import os
 import json
-import sqlite3
+import psycopg2
+from psycopg2.extras import RealDictCursor
 from datetime import datetime, date
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 from dotenv import load_dotenv
@@ -14,7 +15,6 @@ load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dieta-elohim-2025')
-DB_PATH = os.environ.get('DIETA_DB', 'dieta.db')
 
 PASSWORDS = {
     'piso5':       os.environ.get('PASS_PISO5',  'Piso5Elohim'),
@@ -166,7 +166,10 @@ def fmt_time(value):
     if not value:
         return '—'
     try:
-        dt = datetime.fromisoformat(str(value))
+        if isinstance(value, datetime):
+            dt = value
+        else:
+            dt = datetime.fromisoformat(str(value))
         return dt.strftime('%-I:%M %p')
     except Exception:
         return str(value)[11:16]
@@ -177,7 +180,10 @@ def fmt_datetime(value):
     if not value:
         return '—'
     try:
-        dt = datetime.fromisoformat(str(value))
+        if isinstance(value, datetime):
+            dt = value
+        else:
+            dt = datetime.fromisoformat(str(value))
         return dt.strftime('%Y-%m-%d  %-I:%M %p')
     except Exception:
         return str(value)[:16].replace('T', ' ')
@@ -185,16 +191,16 @@ def fmt_datetime(value):
 
 # ─── DATABASE ───────────────────────────────────────────────────────────────
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
     return conn
 
 
 def init_db():
     conn = get_db()
-    conn.executescript('''
+    cur = conn.cursor()
+    cur.execute('''
         CREATE TABLE IF NOT EXISTS patients (
-            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            id            SERIAL PRIMARY KEY,
             name          TEXT NOT NULL,
             floor         TEXT NOT NULL,
             room          TEXT NOT NULL,
@@ -205,13 +211,14 @@ def init_db():
             notes         TEXT DEFAULT '',
             active        INTEGER DEFAULT 1,
             registered_by TEXT,
-            created_at    TEXT DEFAULT CURRENT_TIMESTAMP,
-            updated_at    TEXT DEFAULT CURRENT_TIMESTAMP
-        );
-
+            created_at    TEXT,
+            updated_at    TEXT
+        )
+    ''')
+    cur.execute('''
         CREATE TABLE IF NOT EXISTS meal_orders (
-            id               INTEGER PRIMARY KEY AUTOINCREMENT,
-            patient_id       INTEGER NOT NULL,
+            id               SERIAL PRIMARY KEY,
+            patient_id       INTEGER NOT NULL REFERENCES patients(id),
             order_date       TEXT NOT NULL,
             meal_date        TEXT,
             meal_time        TEXT NOT NULL,
@@ -220,32 +227,12 @@ def init_db():
             confirmed_by     TEXT,
             confirmed_at     TEXT,
             extra_notes      TEXT DEFAULT '',
-            FOREIGN KEY (patient_id) REFERENCES patients(id)
-        );
+            delivery_status  TEXT DEFAULT 'pendiente',
+            nurse_received   INTEGER DEFAULT 0
+        )
     ''')
     conn.commit()
-    # Migraciones: agregar columnas nuevas si no existen
-    for col, defn in [('edad', 'INTEGER'), ('sexo', "TEXT DEFAULT 'masculino'")]:
-        try:
-            conn.execute(f'ALTER TABLE patients ADD COLUMN {col} {defn}')
-            conn.commit()
-        except Exception:
-            pass
-    try:
-        conn.execute('ALTER TABLE meal_orders ADD COLUMN meal_date TEXT')
-        conn.commit()
-    except Exception:
-        pass
-    try:
-        conn.execute("ALTER TABLE meal_orders ADD COLUMN delivery_status TEXT DEFAULT 'pendiente'")
-        conn.commit()
-    except Exception:
-        pass
-    try:
-        conn.execute("ALTER TABLE meal_orders ADD COLUMN nurse_received INTEGER DEFAULT 0")
-        conn.commit()
-    except Exception:
-        pass
+    cur.close()
     conn.close()
 
 
@@ -306,15 +293,19 @@ def dieta_nurse():
     role = session['dieta_role']
     today_str = date.today().strftime('%Y-%m-%d')
     conn = get_db()
-    patients = conn.execute(
-        'SELECT * FROM patients WHERE floor=? AND active=1 ORDER BY room', (role,)
-    ).fetchall()
-    orders = conn.execute(
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute(
+        'SELECT * FROM patients WHERE floor=%s AND active=1 ORDER BY room', (role,)
+    )
+    patients = cur.fetchall()
+    cur.execute(
         '''SELECT mo.* FROM meal_orders mo
            JOIN patients p ON mo.patient_id = p.id
-           WHERE p.floor=? AND p.active=1 AND mo.order_date=?''',
+           WHERE p.floor=%s AND p.active=1 AND mo.order_date=%s''',
         (role, today_str)
-    ).fetchall()
+    )
+    orders = cur.fetchall()
+    cur.close()
     conn.close()
     orders_map = {}
     for o in orders:
@@ -345,13 +336,16 @@ def floor_status():
     role = session['dieta_role']
     today_str = date.today().strftime('%Y-%m-%d')
     conn = get_db()
-    orders = conn.execute(
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute(
         '''SELECT mo.patient_id, mo.meal_time, mo.delivery_status
            FROM meal_orders mo
            JOIN patients p ON mo.patient_id = p.id
-           WHERE p.floor=? AND p.active=1 AND mo.order_date=?''',
+           WHERE p.floor=%s AND p.active=1 AND mo.order_date=%s''',
         (role, today_str)
-    ).fetchall()
+    )
+    orders = cur.fetchall()
+    cur.close()
     conn.close()
     result = {f"{o['patient_id']}_{o['meal_time']}": (o['delivery_status'] or 'pendiente') for o in orders}
     return jsonify(result)
@@ -363,24 +357,27 @@ def add_patient():
     d = request.json
     role = session['dieta_role']
     conn = get_db()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
     nurse_name = session.get('nurse_name', role)
     now_str = datetime.now().isoformat(timespec='seconds')
-    cur = conn.execute(
-        'INSERT INTO patients (name, floor, room, diet_type, condition, edad, sexo, notes, registered_by, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)',
+    cur.execute(
+        '''INSERT INTO patients (name, floor, room, diet_type, condition, edad, sexo, notes, registered_by, created_at)
+           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id''',
         (d['name'].strip(), role, d['room'].strip(), d['diet_type'], d.get('condition', 'normal'),
          d.get('edad'), d.get('sexo', 'masculino'), d.get('notes', ''), nurse_name, now_str)
     )
-    pid = cur.lastrowid
+    pid = cur.fetchone()['id']
     meal_time = d.get('meal_time', 'desayuno')
     today_str = date.today().strftime('%Y-%m-%d')
     meal_date = d.get('meal_date', today_str)
-    conn.execute(
-        'INSERT INTO meal_orders (patient_id, order_date, meal_date, meal_time, options_selected, confirmed, extra_notes) VALUES (?,?,?,?,?,0,?)',
+    cur.execute(
+        '''INSERT INTO meal_orders (patient_id, order_date, meal_date, meal_time, options_selected, confirmed, extra_notes)
+           VALUES (%s,%s,%s,%s,%s,0,%s)''',
         (pid, today_str, meal_date, meal_time, '[]', d.get('notes', ''))
     )
     conn.commit()
+    cur.close()
     conn.close()
-    # Auto-limpiar sesión de enfermera para obligar re-selección
     session.pop('nurse_name', None)
     return jsonify({'ok': True, 'id': pid})
 
@@ -390,11 +387,13 @@ def update_patient(pid):
     if nurse_required(): return jsonify({'error': 'unauthorized'}), 403
     d = request.json
     conn = get_db()
-    conn.execute(
-        'UPDATE patients SET diet_type=?, condition=?, notes=?, updated_at=? WHERE id=?',
+    cur = conn.cursor()
+    cur.execute(
+        'UPDATE patients SET diet_type=%s, condition=%s, notes=%s, updated_at=%s WHERE id=%s',
         (d['diet_type'], d.get('condition', 'normal'), d.get('notes', ''), datetime.now().isoformat(), pid)
     )
     conn.commit()
+    cur.close()
     conn.close()
     return jsonify({'ok': True})
 
@@ -403,8 +402,10 @@ def update_patient(pid):
 def discharge_patient(pid):
     if nurse_required(): return jsonify({'error': 'unauthorized'}), 403
     conn = get_db()
-    conn.execute('UPDATE patients SET active=0, updated_at=? WHERE id=?', (datetime.now().isoformat(), pid))
+    cur = conn.cursor()
+    cur.execute('UPDATE patients SET active=0, updated_at=%s WHERE id=%s', (datetime.now().isoformat(), pid))
     conn.commit()
+    cur.close()
     conn.close()
     return jsonify({'ok': True})
 
@@ -416,12 +417,12 @@ def dieta_cafeteria():
         return redirect(url_for('dieta_login'))
     today = request.args.get('date', date.today().strftime('%Y-%m-%d'))
     conn = get_db()
-    patients = conn.execute(
-        'SELECT * FROM patients WHERE active=1 ORDER BY floor, room'
-    ).fetchall()
-    orders = conn.execute(
-        'SELECT * FROM meal_orders WHERE order_date=?', (today,)
-    ).fetchall()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute('SELECT * FROM patients WHERE active=1 ORDER BY floor, room')
+    patients = cur.fetchall()
+    cur.execute('SELECT * FROM meal_orders WHERE order_date=%s', (today,))
+    orders = cur.fetchall()
+    cur.close()
     conn.close()
     orders_map = {(o['patient_id'], o['meal_time']): dict(o) for o in orders}
     return render_template('dieta_cafeteria.html',
@@ -442,18 +443,21 @@ def nurse_received():
     d = request.json
     today_str = date.today().strftime('%Y-%m-%d')
     conn = get_db()
-    existing = conn.execute(
-        'SELECT id FROM meal_orders WHERE patient_id=? AND order_date=? AND meal_time=?',
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute(
+        'SELECT id FROM meal_orders WHERE patient_id=%s AND order_date=%s AND meal_time=%s',
         (d['patient_id'], today_str, d['meal_time'])
-    ).fetchone()
+    )
+    existing = cur.fetchone()
     if existing:
-        conn.execute('UPDATE meal_orders SET nurse_received=1 WHERE id=?', (existing['id'],))
+        cur.execute('UPDATE meal_orders SET nurse_received=1 WHERE id=%s', (existing['id'],))
     else:
-        conn.execute(
-            'INSERT INTO meal_orders (patient_id, order_date, meal_time, nurse_received, options_selected) VALUES (?,?,?,1,?)',
+        cur.execute(
+            'INSERT INTO meal_orders (patient_id, order_date, meal_time, nurse_received, options_selected) VALUES (%s,%s,%s,1,%s)',
             (d['patient_id'], today_str, d['meal_time'], '[]')
         )
     conn.commit()
+    cur.close()
     conn.close()
     return jsonify({'ok': True})
 
@@ -467,21 +471,24 @@ def update_delivery_status():
     confirmed = 1 if status == 'entregado' else 0
     now = datetime.now().isoformat()
     conn = get_db()
-    existing = conn.execute(
-        'SELECT id FROM meal_orders WHERE patient_id=? AND order_date=? AND meal_time=?',
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute(
+        'SELECT id FROM meal_orders WHERE patient_id=%s AND order_date=%s AND meal_time=%s',
         (d['patient_id'], d['date'], d['meal_time'])
-    ).fetchone()
+    )
+    existing = cur.fetchone()
     if existing:
-        conn.execute(
-            'UPDATE meal_orders SET delivery_status=?, confirmed=?, confirmed_by=?, confirmed_at=? WHERE id=?',
+        cur.execute(
+            'UPDATE meal_orders SET delivery_status=%s, confirmed=%s, confirmed_by=%s, confirmed_at=%s WHERE id=%s',
             (status, confirmed, 'cafeteria', now, existing['id'])
         )
     else:
-        conn.execute(
-            'INSERT INTO meal_orders (patient_id, order_date, meal_time, delivery_status, options_selected, confirmed, confirmed_by, confirmed_at) VALUES (?,?,?,?,?,?,?,?)',
+        cur.execute(
+            'INSERT INTO meal_orders (patient_id, order_date, meal_time, delivery_status, options_selected, confirmed, confirmed_by, confirmed_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)',
             (d['patient_id'], d['date'], d['meal_time'], status, '[]', confirmed, 'cafeteria', now)
         )
     conn.commit()
+    cur.close()
     conn.close()
     return jsonify({'ok': True})
 
@@ -493,21 +500,24 @@ def save_order():
     d = request.json
     now = datetime.now().isoformat()
     conn = get_db()
-    existing = conn.execute(
-        'SELECT id FROM meal_orders WHERE patient_id=? AND order_date=? AND meal_time=?',
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute(
+        'SELECT id FROM meal_orders WHERE patient_id=%s AND order_date=%s AND meal_time=%s',
         (d['patient_id'], d['date'], d['meal_time'])
-    ).fetchone()
+    )
+    existing = cur.fetchone()
     if existing:
-        conn.execute(
-            'UPDATE meal_orders SET options_selected=?, confirmed=1, confirmed_by=?, confirmed_at=?, extra_notes=? WHERE id=?',
+        cur.execute(
+            'UPDATE meal_orders SET options_selected=%s, confirmed=1, confirmed_by=%s, confirmed_at=%s, extra_notes=%s WHERE id=%s',
             (json.dumps(d['options']), 'cafeteria', now, d.get('notes', ''), existing['id'])
         )
     else:
-        conn.execute(
-            'INSERT INTO meal_orders (patient_id, order_date, meal_time, options_selected, confirmed, confirmed_by, confirmed_at, extra_notes) VALUES (?,?,?,?,1,?,?,?)',
+        cur.execute(
+            'INSERT INTO meal_orders (patient_id, order_date, meal_time, options_selected, confirmed, confirmed_by, confirmed_at, extra_notes) VALUES (%s,%s,%s,%s,1,%s,%s,%s)',
             (d['patient_id'], d['date'], d['meal_time'], json.dumps(d['options']), 'cafeteria', now, d.get('notes', ''))
         )
     conn.commit()
+    cur.close()
     conn.close()
     return jsonify({'ok': True})
 
@@ -520,26 +530,31 @@ def dieta_gerencia():
     today = request.args.get('date', date.today().strftime('%Y-%m-%d'))
     floor_filter = request.args.get('floor', 'all')
     conn = get_db()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
     if floor_filter == 'all':
-        patients = conn.execute('SELECT * FROM patients WHERE active=1 ORDER BY floor, room').fetchall()
+        cur.execute('SELECT * FROM patients WHERE active=1 ORDER BY floor, room')
     else:
-        patients = conn.execute('SELECT * FROM patients WHERE active=1 AND floor=? ORDER BY room', (floor_filter,)).fetchall()
-    orders = conn.execute('SELECT * FROM meal_orders WHERE order_date=?', (today,)).fetchall()
+        cur.execute('SELECT * FROM patients WHERE active=1 AND floor=%s ORDER BY room', (floor_filter,))
+    patients = cur.fetchall()
+    cur.execute('SELECT * FROM meal_orders WHERE order_date=%s', (today,))
+    orders = cur.fetchall()
     # Pacientes activos por piso
     floor_counts = {}
     for fk in FLOOR_LABEL:
-        floor_counts[fk] = conn.execute(
-            'SELECT COUNT(*) FROM patients WHERE active=1 AND floor=?', (fk,)
-        ).fetchone()[0]
+        cur.execute('SELECT COUNT(*) as cnt FROM patients WHERE active=1 AND floor=%s', (fk,))
+        floor_counts[fk] = cur.fetchone()['cnt']
     # Conteos por estado de entrega
     status_counts = {}
     for st in ('recibido', 'en_proceso', 'en_camino', 'entregado'):
-        status_counts[st] = conn.execute(
-            "SELECT COUNT(*) FROM meal_orders WHERE order_date=? AND delivery_status=?", (today, st)
-        ).fetchone()[0]
-    status_counts['nurse_received'] = conn.execute(
-        "SELECT COUNT(*) FROM meal_orders WHERE order_date=? AND nurse_received=1", (today,)
-    ).fetchone()[0]
+        cur.execute(
+            'SELECT COUNT(*) as cnt FROM meal_orders WHERE order_date=%s AND delivery_status=%s', (today, st)
+        )
+        status_counts[st] = cur.fetchone()['cnt']
+    cur.execute(
+        'SELECT COUNT(*) as cnt FROM meal_orders WHERE order_date=%s AND nurse_received=1', (today,)
+    )
+    status_counts['nurse_received'] = cur.fetchone()['cnt']
+    cur.close()
     conn.close()
     orders_map = {(o['patient_id'], o['meal_time']): dict(o) for o in orders}
     return render_template('dieta_gerencia.html',
@@ -565,24 +580,29 @@ def gerencia_reporte():
     inicio = request.args.get('inicio', today_str)
     fin    = request.args.get('fin',    today_str)
     conn = get_db()
-    patients = conn.execute(
-        "SELECT * FROM patients WHERE DATE(created_at) BETWEEN ? AND ? ORDER BY floor, created_at",
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    # Use LEFT(created_at, 10) for safe date-string comparison
+    cur.execute(
+        "SELECT * FROM patients WHERE LEFT(created_at, 10) BETWEEN %s AND %s ORDER BY floor, created_at",
         (inicio, fin)
-    ).fetchall()
-    orders = conn.execute(
+    )
+    patients = cur.fetchall()
+    cur.execute(
         '''SELECT mo.*, p.name as patient_name, p.floor, p.room, p.diet_type,
                   p.condition, p.edad, p.sexo, p.registered_by
            FROM meal_orders mo
            JOIN patients p ON mo.patient_id = p.id
-           WHERE mo.order_date BETWEEN ? AND ?
+           WHERE mo.order_date BETWEEN %s AND %s
            ORDER BY mo.order_date, p.floor, mo.meal_time''',
         (inicio, fin)
-    ).fetchall()
+    )
+    orders = cur.fetchall()
+    cur.close()
+    conn.close()
     # Estadísticas
     total_pacientes = len(patients)
     total_pedidos   = len(orders)
     confirmados     = sum(1 for o in orders if o['confirmed'])
-    conn.close()
     return render_template('dieta_reporte.html',
                            patients=patients,
                            orders=orders,

@@ -158,6 +158,85 @@ MEAL_TIMES = [
     ('cena',     'Cena',     '6:30 PM'),
 ]
 
+# ─── MENÚS POR DÍA ──────────────────────────────────────────────────────────
+DAY_NAMES = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo']
+
+MENU_NORMAL = {
+    'lunes':     {
+        'desayuno': ['Avena con galletas de soda'],
+        'almuerzo': ['Pescado a la plancha con mango y ensalada servida'],
+        'cena':     ['Quesadilla con jugo de lechosa y avena'],
+    },
+    'martes':    {
+        'desayuno': ['Cereal y leche'],
+        'almuerzo': ['Sopa de pollo con arroz'],
+        'cena':     ['Sandwich con jugo de lechosa'],
+    },
+    'miercoles': {
+        'desayuno': ['Desayuno de frutas'],
+        'almuerzo': ['Trigo con pollo desmenuzado y ensalada servida'],
+        'cena':     ['Jugo de pera/piña con tortilla de huevo'],
+    },
+    'jueves':    {
+        'desayuno': ['Avena con galletas'],
+        'almuerzo': ['Carne molida con yautía'],
+        'cena':     ['Sopa de pollo'],
+    },
+    'viernes':   {
+        'desayuno': ['Maicena'],
+        'almuerzo': ['Moro con pollo desmenuzado y ensalada'],
+        'cena':     ['Sandwich con jugo'],
+    },
+    'sabado':    {
+        'desayuno': ['Pan con huevo hervido y jugo de lechosa'],
+        'almuerzo': ['Guineo, carne molida y ensalada verde'],
+        'cena':     ['Quesadilla con jugo de piña'],
+    },
+    'domingo':   {
+        'desayuno': ['Avena con galletas de soda'],
+        'almuerzo': ['Sopa de pollo con arroz'],
+        'cena':     ['Sandwich con jugo'],
+    },
+}
+
+MENU_DIABETICO = {
+    'lunes':     {
+        'desayuno': ['Pan integral con huevo revuelto y jugo'],
+        'almuerzo': ['Mango, ensalada hervida y carne molida'],
+        'cena':     ['Mango con queso'],
+    },
+    'martes':    {
+        'desayuno': ['Guineos y huevos hervidos'],
+        'almuerzo': ['Sopa de pollo'],
+        'cena':     ['Yautía con queso mozzarella'],
+    },
+    'miercoles': {
+        'desayuno': ['Auyama y huevo revuelto'],
+        'almuerzo': ['Trigo con pollo desmenuzado y ensalada'],
+        'cena':     ['Guineo con huevo hervido'],
+    },
+    'jueves':    {
+        'desayuno': ['Pan integral con huevo hervido'],
+        'almuerzo': ['Guineo con pollo'],
+        'cena':     ['Sopa de pollo'],
+    },
+    'viernes':   {
+        'desayuno': ['Pan integral con jamón y jugo de lechosa'],
+        'almuerzo': ['Guinéitos con pollo desmenuzado'],
+        'cena':     ['Yautía y huevo hervido'],
+    },
+    'sabado':    {
+        'desayuno': ['Pan con huevo hervido'],
+        'almuerzo': ['Puré de guineo con carne molida y ensalada verde'],
+        'cena':     ['Auyama con jamón y jugo de piña'],
+    },
+    'domingo':   {
+        'desayuno': ['Guineo con jamón'],
+        'almuerzo': ['Sopa de pollo con arroz'],
+        'cena':     ['Quesadilla con jugo de lechosa'],
+    },
+}
+
 
 # ─── TEMPLATE FILTERS ───────────────────────────────────────────────────────
 @app.template_filter('fmt_time')
@@ -292,6 +371,7 @@ def dieta_nurse():
     if redir: return redir
     role = session['dieta_role']
     today_str = date.today().strftime('%Y-%m-%d')
+    today_day = DAY_NAMES[date.today().weekday()]
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     cur.execute(
@@ -322,6 +402,9 @@ def dieta_nurse():
                            role_name=ROLE_NAMES[role],
                            floor_label=FLOOR_LABEL[role],
                            today=today_str,
+                           today_day=today_day,
+                           menu_normal=MENU_NORMAL,
+                           menu_diabetico=MENU_DIABETICO,
                            diet_options=DIET_OPTIONS,
                            condition_notes=CONDITION_NOTES,
                            condition_label=CONDITION_LABEL,
@@ -398,6 +481,36 @@ def update_patient(pid):
     return jsonify({'ok': True})
 
 
+@app.route('/api/patient/<int:pid>/add-meal', methods=['POST'])
+def add_meal(pid):
+    """Agregar un pedido de comida a un paciente ya registrado (sin duplicar el paciente)."""
+    if nurse_required(): return jsonify({'error': 'unauthorized'}), 403
+    d = request.json
+    today_str = date.today().strftime('%Y-%m-%d')
+    meal_time = d.get('meal_time', 'almuerzo')
+    meal_date = d.get('meal_date', today_str)
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    # Solo crear si no existe ya para este tiempo
+    cur.execute(
+        'SELECT id FROM meal_orders WHERE patient_id=%s AND order_date=%s AND meal_time=%s',
+        (pid, today_str, meal_time)
+    )
+    if not cur.fetchone():
+        cur.execute(
+            '''INSERT INTO meal_orders (patient_id, order_date, meal_date, meal_time, options_selected, confirmed, extra_notes)
+               VALUES (%s,%s,%s,%s,%s,0,%s)''',
+            (pid, today_str, meal_date, meal_time, '[]', d.get('notes', ''))
+        )
+        conn.commit()
+        result = {'ok': True, 'created': True}
+    else:
+        result = {'ok': True, 'created': False, 'msg': 'Ya existe un pedido para ese tiempo de comida'}
+    cur.close()
+    conn.close()
+    return jsonify(result)
+
+
 @app.route('/api/patient/<int:pid>/discharge', methods=['POST'])
 def discharge_patient(pid):
     if nurse_required(): return jsonify({'error': 'unauthorized'}), 403
@@ -416,6 +529,8 @@ def dieta_cafeteria():
     if session.get('dieta_role') != 'cafeteria':
         return redirect(url_for('dieta_login'))
     today = request.args.get('date', date.today().strftime('%Y-%m-%d'))
+    today_date_obj = datetime.strptime(today, '%Y-%m-%d').date()
+    today_day = DAY_NAMES[today_date_obj.weekday()]
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     cur.execute('SELECT * FROM patients WHERE active=1 ORDER BY floor, room')
@@ -429,6 +544,9 @@ def dieta_cafeteria():
                            patients=patients,
                            orders_map=orders_map,
                            today=today,
+                           today_day=today_day,
+                           menu_normal=MENU_NORMAL,
+                           menu_diabetico=MENU_DIABETICO,
                            meal_times=MEAL_TIMES,
                            diet_options=DIET_OPTIONS,
                            condition_notes=CONDITION_NOTES,
@@ -450,13 +568,9 @@ def nurse_received():
     )
     existing = cur.fetchone()
     if existing:
+        # Solo actualizar — nunca crear pedidos automáticos
         cur.execute('UPDATE meal_orders SET nurse_received=1 WHERE id=%s', (existing['id'],))
-    else:
-        cur.execute(
-            'INSERT INTO meal_orders (patient_id, order_date, meal_time, nurse_received, options_selected) VALUES (%s,%s,%s,1,%s)',
-            (d['patient_id'], today_str, d['meal_time'], '[]')
-        )
-    conn.commit()
+        conn.commit()
     cur.close()
     conn.close()
     return jsonify({'ok': True})
@@ -478,16 +592,12 @@ def update_delivery_status():
     )
     existing = cur.fetchone()
     if existing:
+        # Solo actualizar — nunca crear pedidos automáticos desde cafetería
         cur.execute(
             'UPDATE meal_orders SET delivery_status=%s, confirmed=%s, confirmed_by=%s, confirmed_at=%s WHERE id=%s',
             (status, confirmed, 'cafeteria', now, existing['id'])
         )
-    else:
-        cur.execute(
-            'INSERT INTO meal_orders (patient_id, order_date, meal_time, delivery_status, options_selected, confirmed, confirmed_by, confirmed_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)',
-            (d['patient_id'], d['date'], d['meal_time'], status, '[]', confirmed, 'cafeteria', now)
-        )
-    conn.commit()
+        conn.commit()
     cur.close()
     conn.close()
     return jsonify({'ok': True})
@@ -507,16 +617,12 @@ def save_order():
     )
     existing = cur.fetchone()
     if existing:
+        # Solo actualizar — nunca crear pedidos automáticos desde cafetería
         cur.execute(
             'UPDATE meal_orders SET options_selected=%s, confirmed=1, confirmed_by=%s, confirmed_at=%s, extra_notes=%s WHERE id=%s',
             (json.dumps(d['options']), 'cafeteria', now, d.get('notes', ''), existing['id'])
         )
-    else:
-        cur.execute(
-            'INSERT INTO meal_orders (patient_id, order_date, meal_time, options_selected, confirmed, confirmed_by, confirmed_at, extra_notes) VALUES (%s,%s,%s,%s,1,%s,%s,%s)',
-            (d['patient_id'], d['date'], d['meal_time'], json.dumps(d['options']), 'cafeteria', now, d.get('notes', ''))
-        )
-    conn.commit()
+        conn.commit()
     cur.close()
     conn.close()
     return jsonify({'ok': True})

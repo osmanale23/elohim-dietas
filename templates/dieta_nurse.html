@@ -270,39 +270,61 @@
       {% if p.notes %}
       <div style="font-size:12px;color:var(--mid);margin-bottom:10px;font-style:italic;">📝 {{ p.notes }}</div>
       {% endif %}
-      <!-- Estado de entregas del día -->
+      <!-- Menú de hoy -->
+      {% if p.condition == 'diabetico' %}
+        {% set day_menu = menu_diabetico[today_day] %}
+        {% set menu_label = '🩺 Menú Diabético — ' + today_day|capitalize %}
+      {% elif p.diet_type == 'corriente' %}
+        {% set day_menu = menu_normal[today_day] %}
+        {% set menu_label = '🍽️ Menú Normal — ' + today_day|capitalize %}
+      {% else %}
+        {% set day_menu = none %}
+      {% endif %}
+      {% if day_menu %}
+      <div style="background:#F0F8F4;border-left:3px solid var(--green-l);border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:11px;">
+        <div style="font-weight:700;color:var(--mid);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">{{ menu_label }}</div>
+        {% for mk2, ml2, _ in [('desayuno','Desayuno'),('almuerzo','Almuerzo'),('cena','Cena')] %}
+        <div style="color:var(--dark);padding:1px 0;"><strong>{{ ml2 }}:</strong> {{ day_menu[mk2][0] }}</div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <!-- Estado de entregas del día (solo comidas registradas) -->
       <div id="drow-{{ p.id }}">
+        {% set meal_icons = {'desayuno':'🌅','almuerzo':'☀️','cena':'🌙'} %}
+        {% set ds_labels = {'pendiente':'Pendiente','recibido':'Recibido','en_proceso':'En Proceso','en_camino':'En Camino','entregado':'Entregado'} %}
         {% for mk, ml, mh in [('desayuno','Desayuno','7:30 AM'),('almuerzo','Almuerzo','12:30 PM'),('cena','Cena','6:30 PM')] %}
-          {% set meal_icons = {'desayuno':'🌅','almuerzo':'☀️','cena':'🌙'} %}
           {% set ord = orders_map.get((p.id, mk)) %}
-          {% set ds = ord['delivery_status'] if ord and ord['delivery_status'] else 'pendiente' %}
-          {% set nr = ord['nurse_received'] if ord else 0 %}
-          {% set ds_labels = {'pendiente':'Pendiente','recibido':'Recibido','en_proceso':'En Proceso','en_camino':'En Camino','entregado':'Entregado'} %}
-          <div class="meal-status-row">
-            <span class="ds-badge ds-{{ ds }}" id="ds-{{ p.id }}-{{ mk }}">
-              {{ meal_icons[mk] }} {{ ml }}: {{ ds_labels[ds] }}
-            </span>
-            {% if nr %}
-            <span class="recv-stamp" id="recv-{{ p.id }}-{{ mk }}">✓ Recibido por enfermería</span>
-            {% else %}
-            <button class="recv-btn" id="recv-{{ p.id }}-{{ mk }}"
-              onclick="marcarRecibido({{ p.id }}, '{{ mk }}', this)">
-              Marcar como Recibido
-            </button>
+          {% if ord %}
+            {% set ds = ord['delivery_status'] if ord['delivery_status'] else 'pendiente' %}
+            {% set nr = ord['nurse_received'] %}
+            <div class="meal-status-row">
+              <span class="ds-badge ds-{{ ds }}" id="ds-{{ p.id }}-{{ mk }}">
+                {{ meal_icons[mk] }} {{ ml }}: {{ ds_labels[ds] }}
+              </span>
+              {% if nr %}
+              <span class="recv-stamp" id="recv-{{ p.id }}-{{ mk }}">✓ Recibido por enfermería</span>
+              {% else %}
+              <button class="recv-btn" id="recv-{{ p.id }}-{{ mk }}"
+                onclick="marcarRecibido({{ p.id }}, '{{ mk }}', this)">
+                Marcar como Recibido
+              </button>
+              {% endif %}
+            </div>
+            {% if ord['options_list'] %}
+            <div style="margin:-2px 0 8px 4px; padding:8px 12px; background:#F7FBF8; border-left:3px solid var(--green-l); border-radius:6px;">
+              <div style="font-size:10px;color:var(--mid);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;">🍽️ Seleccionado por Cafetería:</div>
+              {% for item in ord['options_list'] %}
+              <div style="font-size:12px;color:var(--dark);padding:2px 0;">• {{ item }}</div>
+              {% endfor %}
+            </div>
             {% endif %}
-          </div>
-          {% if ord and ord['options_list'] %}
-          <div style="margin:-2px 0 8px 4px; padding:8px 12px; background:#F7FBF8; border-left:3px solid var(--green-l); border-radius:6px;">
-            <div style="font-size:10px;color:var(--mid);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;">🍽️ Seleccionado por Cafetería:</div>
-            {% for item in ord['options_list'] %}
-            <div style="font-size:12px;color:var(--dark);padding:2px 0;">• {{ item }}</div>
-            {% endfor %}
-          </div>
           {% endif %}
         {% endfor %}
       </div>
       <div class="card-actions">
-        <button class="discharge-btn" style="flex:1;" onclick="discharge({{ p.id }}, '{{ p.name }}')">🏥 Dar de Alta</button>
+        <button class="edit-btn" onclick="openAddMeal({{ p.id }}, '{{ p.name }}')">📋 Agregar Comida</button>
+        <button class="discharge-btn" onclick="discharge({{ p.id }}, '{{ p.name }}')">🏥 Alta</button>
       </div>
     </div>
     {% endfor %}
@@ -314,6 +336,32 @@
     <div style="font-size:13px;">Usa el botón "+ Registrar Paciente" para agregar el primero.</div>
   </div>
   {% endif %}
+</div>
+
+<!-- ADD MEAL MODAL -->
+<div class="modal-overlay" id="addMealModal">
+  <div class="modal">
+    <div class="modal-title">📋 Agregar Comida</div>
+    <p id="addMealPatientName" style="font-size:14px;font-weight:600;color:var(--mid);margin-bottom:16px;"></p>
+    <div style="display:flex;gap:12px;">
+      <div class="form-group" style="flex:1;">
+        <label>Tiempo de Comida</label>
+        <select id="addMealTime2">
+          <option value="desayuno">🌅 Desayuno — 7:30 AM</option>
+          <option value="almuerzo">☀️ Almuerzo — 12:30 PM</option>
+          <option value="cena">🌙 Cena — 6:30 PM</option>
+        </select>
+      </div>
+      <div class="form-group" style="flex:1;">
+        <label>Fecha de la Comida</label>
+        <input type="date" id="addMealDate2">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="cancel-btn" onclick="closeAddMeal()">Cancelar</button>
+      <button class="save-btn" onclick="saveAddMeal()">Registrar Comida</button>
+    </div>
+  </div>
 </div>
 
 <!-- ADD MODAL -->
@@ -489,6 +537,39 @@ async function refreshStatus() {
   } catch(e) {}
 }
 setInterval(refreshStatus, 30000);
+
+// ADD MEAL TO EXISTING PATIENT
+let _addMealPid = null;
+function openAddMeal(pid, name) {
+  _addMealPid = pid;
+  document.getElementById('addMealPatientName').textContent = '👤 ' + name;
+  document.getElementById('addMealDate2').value = new Date().toISOString().slice(0,10);
+  document.getElementById('addMealModal').classList.add('active');
+}
+function closeAddMeal() {
+  document.getElementById('addMealModal').classList.remove('active');
+  _addMealPid = null;
+}
+async function saveAddMeal() {
+  if (!_addMealPid) return;
+  const r = await fetch(`/api/patient/${_addMealPid}/add-meal`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      meal_time: document.getElementById('addMealTime2').value,
+      meal_date: document.getElementById('addMealDate2').value,
+    })
+  });
+  const res = await r.json();
+  if (res.ok) {
+    closeAddMeal();
+    if (res.created) {
+      showToast('✅ Comida registrada');
+      setTimeout(() => location.reload(), 900);
+    } else {
+      showToast('⚠️ ' + (res.msg || 'Ya existe un pedido para ese tiempo'));
+    }
+  }
+}
 
 // DISCHARGE
 async function discharge(id, name) {

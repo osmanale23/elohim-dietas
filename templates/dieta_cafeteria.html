@@ -214,7 +214,6 @@
         </div>
         {% for p in floor_patients %}
           {% set order = orders_map.get((p.id, meal_key)) %}
-          {% set is_confirmed = order and order['confirmed'] %}
           <div class="patient-row floor-{{ p.floor }}">
             <div class="patient-info">
               <span class="patient-name">{{ p.name }}</span>
@@ -230,36 +229,52 @@
             <div class="cond-note">⚠️ {{ condition_notes[p.condition] }}</div>
             {% endif %}
 
-            {% set opts = diet_options[p.diet_type][meal_key] %}
-            {% set selected_opts = order['options_selected']|default('[]') if order else '[]' %}
-            <div class="options-grid" id="opts-{{ p.id }}-{{ meal_key }}">
-              {% for opt in opts %}
-              <label class="option-item {% if opt in selected_opts %}selected{% endif %}" onclick="toggleOption(this)">
-                <input type="checkbox" value="{{ opt }}" {% if opt in selected_opts %}checked{% endif %}>
-                {{ opt }}
-              </label>
-              {% endfor %}
-            </div>
+            {% if order %}
+              {# Seleccionar opciones según tipo de dieta y condición #}
+              {% if p.condition == 'diabetico' %}
+                {% set opts = menu_diabetico[today_day][meal_key] %}
+              {% elif p.diet_type == 'corriente' %}
+                {% set opts = menu_normal[today_day][meal_key] %}
+              {% else %}
+                {% set opts = diet_options[p.diet_type][meal_key] %}
+              {% endif %}
+              {% set selected_opts = order['options_selected'] if order['options_selected'] else '[]' %}
+              <div class="options-grid" id="opts-{{ p.id }}-{{ meal_key }}">
+                {% for opt in opts %}
+                <label class="option-item {% if opt in selected_opts %}selected{% endif %}" onclick="toggleOption(this)">
+                  <input type="checkbox" value="{{ opt }}" {% if opt in selected_opts %}checked{% endif %}>
+                  {{ opt }}
+                </label>
+                {% endfor %}
+              </div>
+              <div style="margin-bottom:10px;">
+                <button class="confirm-btn" onclick="saveOptions({{ p.id }},'{{ meal_key }}')">💾 Guardar selección</button>
+              </div>
 
-            {% set cur_status = order['delivery_status'] if order and order['delivery_status'] else 'pendiente' %}
-            <div class="status-bar" id="sbar-{{ p.id }}-{{ meal_key }}">
-              <button class="status-btn status-recibido  {% if cur_status=='recibido'   %}active{% endif %}"
-                onclick="setStatus({{ p.id }},'{{ meal_key }}','{{ today }}','recibido',this)">
-                📥 Recibido
-              </button>
-              <button class="status-btn status-en_proceso {% if cur_status=='en_proceso' %}active{% endif %}"
-                onclick="setStatus({{ p.id }},'{{ meal_key }}','{{ today }}','en_proceso',this)">
-                👨‍🍳 En Proceso
-              </button>
-              <button class="status-btn status-en_camino  {% if cur_status=='en_camino'  %}active{% endif %}"
-                onclick="setStatus({{ p.id }},'{{ meal_key }}','{{ today }}','en_camino',this)">
-                🚀 En Camino
-              </button>
-              <button class="status-btn status-entregado  {% if cur_status=='entregado'  %}active{% endif %}"
-                onclick="setStatus({{ p.id }},'{{ meal_key }}','{{ today }}','entregado',this)">
-                ✅ Entregado
-              </button>
-            </div>
+              {% set cur_status = order['delivery_status'] if order['delivery_status'] else 'pendiente' %}
+              <div class="status-bar" id="sbar-{{ p.id }}-{{ meal_key }}">
+                <button class="status-btn status-recibido  {% if cur_status=='recibido'   %}active{% endif %}"
+                  onclick="setStatus({{ p.id }},'{{ meal_key }}','{{ today }}','recibido',this)">
+                  📥 Recibido
+                </button>
+                <button class="status-btn status-en_proceso {% if cur_status=='en_proceso' %}active{% endif %}"
+                  onclick="setStatus({{ p.id }},'{{ meal_key }}','{{ today }}','en_proceso',this)">
+                  👨‍🍳 En Proceso
+                </button>
+                <button class="status-btn status-en_camino  {% if cur_status=='en_camino'  %}active{% endif %}"
+                  onclick="setStatus({{ p.id }},'{{ meal_key }}','{{ today }}','en_camino',this)">
+                  🚀 En Camino
+                </button>
+                <button class="status-btn status-entregado  {% if cur_status=='entregado'  %}active{% endif %}"
+                  onclick="setStatus({{ p.id }},'{{ meal_key }}','{{ today }}','entregado',this)">
+                  ✅ Entregado
+                </button>
+              </div>
+            {% else %}
+              <div style="font-size:12px;color:#aaa;padding:8px 0;font-style:italic;">
+                ⏸ No hay pedido registrado por enfermería para este tiempo de comida
+              </div>
+            {% endif %}
           </div>
         {% endfor %}
       </div>
@@ -290,6 +305,15 @@ function changeDate(val) {
 function toggleOption(el) {
   el.classList.toggle('selected');
   el.querySelector('input').checked = el.classList.contains('selected');
+}
+async function saveOptions(pid, mealKey) {
+  const grid = document.getElementById(`opts-${pid}-${mealKey}`);
+  const selected = [...grid.querySelectorAll('input:checked')].map(i => i.value);
+  const r = await fetch('/api/order/save', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ patient_id:pid, meal_time:mealKey, date:'{{ today }}', options:selected, notes:'' })
+  });
+  if ((await r.json()).ok) showToast('✅ Selección guardada');
 }
 async function setStatus(pid, mealKey, orderDate, status, btn) {
   const r = await fetch('/api/order/delivery-status', {

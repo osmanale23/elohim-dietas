@@ -310,6 +310,10 @@ def init_db():
             order_date       TEXT NOT NULL,
             meal_date        TEXT,
             meal_time        TEXT NOT NULL,
+            diet_type        TEXT DEFAULT 'corriente',
+            condition        TEXT DEFAULT 'normal',
+            meal_notes       TEXT DEFAULT '',
+            dieta_cero       INTEGER DEFAULT 0,
             options_selected TEXT DEFAULT '[]',
             confirmed        INTEGER DEFAULT 0,
             confirmed_by     TEXT,
@@ -319,6 +323,14 @@ def init_db():
             nurse_received   INTEGER DEFAULT 0
         )
     ''')
+    # Agregar columnas nuevas a meal_orders si no existen
+    for stmt in [
+        "ALTER TABLE meal_orders ADD COLUMN IF NOT EXISTS diet_type TEXT DEFAULT 'corriente'",
+        "ALTER TABLE meal_orders ADD COLUMN IF NOT EXISTS condition TEXT DEFAULT 'normal'",
+        "ALTER TABLE meal_orders ADD COLUMN IF NOT EXISTS meal_notes TEXT DEFAULT ''",
+        "ALTER TABLE meal_orders ADD COLUMN IF NOT EXISTS dieta_cero INTEGER DEFAULT 0",
+    ]:
+        cur.execute(stmt)
     conn.commit()
     cur.close()
     conn.close()
@@ -394,6 +406,13 @@ def dieta_nurse():
         (role, today_str)
     )
     orders = cur.fetchall()
+    # Pacientes transferibles (solo para piso5 y piso6)
+    transferable = []
+    if role in ('piso5', 'piso6'):
+        cur.execute(
+            "SELECT * FROM patients WHERE floor IN ('emergencia','uci','ucin') AND active=1 ORDER BY floor, created_at DESC"
+        )
+        transferable = cur.fetchall()
     cur.close()
     conn.close()
     orders_map = {}
@@ -407,6 +426,7 @@ def dieta_nurse():
     return render_template('dieta_nurse.html',
                            patients=patients,
                            orders_map=orders_map,
+                           transferable=transferable,
                            role=role,
                            role_name=ROLE_NAMES[role],
                            floor_label=FLOOR_LABEL[role],
@@ -417,6 +437,7 @@ def dieta_nurse():
                            diet_options=DIET_OPTIONS,
                            condition_notes=CONDITION_NOTES,
                            condition_label=CONDITION_LABEL,
+                           condition_label_full=CONDITION_LABEL,
                            nurses=NURSES,
                            active_nurse=session.get('nurse_name', ''))
 
@@ -463,9 +484,12 @@ def add_patient():
     today_str = date.today().strftime('%Y-%m-%d')
     meal_date = d.get('meal_date', today_str)
     cur.execute(
-        '''INSERT INTO meal_orders (patient_id, order_date, meal_date, meal_time, options_selected, confirmed, extra_notes)
-           VALUES (%s,%s,%s,%s,%s,0,%s)''',
-        (pid, today_str, meal_date, meal_time, '[]', d.get('notes', ''))
+        '''INSERT INTO meal_orders (patient_id, order_date, meal_date, meal_time, diet_type, condition, meal_notes, dieta_cero, options_selected, confirmed, extra_notes)
+           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,0,%s)''',
+        (pid, today_str, meal_date, meal_time,
+         d.get('diet_type', 'corriente'), d.get('condition', 'normal'),
+         d.get('meal_notes', ''), 1 if d.get('dieta_cero') else 0,
+         '[]', d.get('notes', ''))
     )
     conn.commit()
     cur.close()
@@ -507,9 +531,12 @@ def add_meal(pid):
     )
     if not cur.fetchone():
         cur.execute(
-            '''INSERT INTO meal_orders (patient_id, order_date, meal_date, meal_time, options_selected, confirmed, extra_notes)
-               VALUES (%s,%s,%s,%s,%s,0,%s)''',
-            (pid, today_str, meal_date, meal_time, '[]', d.get('notes', ''))
+            '''INSERT INTO meal_orders (patient_id, order_date, meal_date, meal_time, diet_type, condition, meal_notes, dieta_cero, options_selected, confirmed, extra_notes)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,0,%s)''',
+            (pid, today_str, meal_date, meal_time,
+             d.get('diet_type', 'corriente'), d.get('condition', 'normal'),
+             d.get('meal_notes', ''), 1 if d.get('dieta_cero') else 0,
+             '[]', d.get('meal_notes', ''))
         )
         conn.commit()
         result = {'ok': True, 'created': True}
@@ -530,6 +557,56 @@ def discharge_patient(pid):
     cur.close()
     conn.close()
     return jsonify({'ok': True})
+
+
+@app.route('/api/transferable-patients')
+def transferable_patients():
+    """Pacientes en emergencia/UCI/UCIN disponibles para transferir a piso."""
+    redir = nurse_required()
+    if redir: return jsonify({'error': 'unauthorized'}), 403
+    role = session['dieta_role']
+    if role not in ('piso5', 'piso6'):
+        return jsonify({'patients': []})
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute(
+        "SELECT * FROM patients WHERE floor IN ('emergencia','uci','ucin') AND active=1 ORDER BY floor, created_at DESC"
+    )
+    patients = [dict(p) for p in cur.fetchall()]
+    cur.close()
+    conn.close()
+    return jsonify({'patients': patients})
+
+
+@app.route('/api/patient/<int:pid>/transfer', methods=['POST'])
+def transfer_patient(pid):
+    """Transferir paciente de emergencia/UCI/UCIN a piso."""
+    redir = nurse_required()
+    if redir: return jsonify({'error': 'unauthorized'}), 403
+    role = session['dieta_role']
+    if role not in ('piso5', 'piso6'):
+        return jsonify({'error': 'Solo enfermeras de piso pueden recibir transferencias'}), 403
+    d = request.json
+    new_room = d.get('room', '').strip()
+    if not new_room:
+        return jsonify({'error': 'Habitación requerida'}), 400
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    # Verificar que el paciente está en una unidad transferible
+    cur.execute('SELECT * FROM patients WHERE id=%s AND active=1', (pid,))
+    patient = cur.fetchone()
+    if not patient or patient['floor'] not in ('emergencia', 'uci', 'ucin'):
+        cur.close(); conn.close()
+        return jsonify({'error': 'Paciente no transferible'}), 400
+    origin_floor = patient['floor']
+    cur.execute(
+        'UPDATE patients SET floor=%s, room=%s, updated_at=%s WHERE id=%s',
+        (role, new_room, datetime.now().isoformat(), pid)
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+    return jsonify({'ok': True, 'from': origin_floor, 'to': role, 'room': new_room})
 
 
 # ─── CAFETERÍA VIEW ──────────────────────────────────────────────────────────

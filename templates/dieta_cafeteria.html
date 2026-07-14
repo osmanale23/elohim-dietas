@@ -174,27 +174,84 @@
     </div>
   </div>
 
-  <!-- STATS -->
+  <!-- RESUMEN + STATS -->
   {% set total_p = patients|length %}
-  {% set confirmed = namespace(count=0) %}
+  {% set ns = namespace(confirmed=0, cero=0, corriente=0, blanda=0, liquida=0, otra=0, total_orders=0) %}
   {% for p in patients %}
-    {% for key, _, _ in meal_times %}
-      {% if orders_map.get((p.id, key)) and orders_map[(p.id, key)]['confirmed'] %}
-        {% set confirmed.count = confirmed.count + 1 %}
+    {% for mk, _, _ in meal_times %}
+      {% set ord = orders_map.get((p.id, mk)) %}
+      {% if ord %}
+        {% set ns.total_orders = ns.total_orders + 1 %}
+        {% if ord.get('confirmed') %}{% set ns.confirmed = ns.confirmed + 1 %}{% endif %}
+        {% if ord.get('dieta_cero') %}{% set ns.cero = ns.cero + 1 %}
+        {% elif ord.get('diet_type') == 'blanda' %}{% set ns.blanda = ns.blanda + 1 %}
+        {% elif ord.get('diet_type') == 'liquida' %}{% set ns.liquida = ns.liquida + 1 %}
+        {% elif ord.get('diet_type') == 'otra' %}{% set ns.otra = ns.otra + 1 %}
+        {% else %}{% set ns.corriente = ns.corriente + 1 %}{% endif %}
       {% endif %}
     {% endfor %}
   {% endfor %}
+
+  <!-- Resumen detallado -->
+  <div style="background:white;border-radius:14px;padding:18px 20px;margin-bottom:16px;border:1.5px solid var(--border);box-shadow:0 2px 8px rgba(0,0,0,0.05);">
+    <div style="font-size:12px;font-weight:700;color:var(--mid);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;">📊 Resumen del día — {{ today }}</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <div class="stat-box" style="flex:1;min-width:90px;">
+        <div class="stat-num">{{ total_p }}</div>
+        <div class="stat-label">Pacientes</div>
+      </div>
+      <div class="stat-box" style="flex:1;min-width:90px;">
+        <div class="stat-num" style="color:var(--green);">{{ ns.total_orders }}</div>
+        <div class="stat-label">Comidas registradas</div>
+      </div>
+      <div class="stat-box" style="flex:1;min-width:90px;">
+        <div class="stat-num" style="color:#E67E22;">{{ ns.total_orders - ns.confirmed }}</div>
+        <div class="stat-label">Por confirmar</div>
+      </div>
+      {% if ns.cero > 0 %}
+      <div class="stat-box" style="flex:1;min-width:90px;border-color:#F5C6C6;">
+        <div class="stat-num" style="color:#C0392B;">{{ ns.cero }}</div>
+        <div class="stat-label">⛔ Dieta Cero</div>
+      </div>
+      {% endif %}
+      {% if ns.corriente > 0 %}
+      <div class="stat-box" style="flex:1;min-width:90px;">
+        <div class="stat-num" style="color:#2E7D32;">{{ ns.corriente }}</div>
+        <div class="stat-label">Corriente</div>
+      </div>
+      {% endif %}
+      {% if ns.blanda > 0 %}
+      <div class="stat-box" style="flex:1;min-width:90px;">
+        <div class="stat-num" style="color:#F57F17;">{{ ns.blanda }}</div>
+        <div class="stat-label">Blanda</div>
+      </div>
+      {% endif %}
+      {% if ns.liquida > 0 %}
+      <div class="stat-box" style="flex:1;min-width:90px;">
+        <div class="stat-num" style="color:#1565C0;">{{ ns.liquida }}</div>
+        <div class="stat-label">Líquida</div>
+      </div>
+      {% endif %}
+      {% if ns.otra > 0 %}
+      <div class="stat-box" style="flex:1;min-width:90px;border-color:#CE93D8;">
+        <div class="stat-num" style="color:#6A1B9A;">{{ ns.otra }}</div>
+        <div class="stat-label">⚠️ Especial</div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
   <div class="stats">
     <div class="stat-box">
       <div class="stat-num">{{ total_p }}</div>
       <div class="stat-label">Pacientes activos</div>
     </div>
     <div class="stat-box green">
-      <div class="stat-num">{{ confirmed.count }}</div>
+      <div class="stat-num">{{ ns.confirmed }}</div>
       <div class="stat-label">Comidas confirmadas hoy</div>
     </div>
     <div class="stat-box orange">
-      <div class="stat-num">{{ [0, total_p * 3 - confirmed.count] | max }}</div>
+      <div class="stat-num">{{ ns.total_orders - ns.confirmed }}</div>
       <div class="stat-label">Pendientes de confirmar</div>
     </div>
   </div>
@@ -214,29 +271,60 @@
         </div>
         {% for p in floor_patients %}
           {% set order = orders_map.get((p.id, meal_key)) %}
+          {% set o_diet = order.diet_type if order and order.diet_type else p.diet_type %}
+          {% set o_cond = order.condition if order and order.condition else p.condition %}
+          {% set o_cero = order.dieta_cero if order else 0 %}
+          {% set o_notes = order.meal_notes if order and order.meal_notes else '' %}
           <div class="patient-row floor-{{ p.floor }}">
             <div class="patient-info">
               <span class="patient-name">{{ p.name }}</span>
               <span class="room-tag">Hab. {{ p.room }}</span>
-              <span class="badge diet-{{ p.diet_type }}">
-                {% if p.diet_type=='corriente' %}Dieta Corriente{% elif p.diet_type=='blanda' %}Dieta Blanda{% else %}Dieta Líquida{% endif %}
+              {% if o_cero %}
+              <span class="badge" style="background:#FDECEA;color:#C0392B;border:1px solid #F5C6C6;">⛔ Dieta Cero</span>
+              {% elif o_diet == 'otra' %}
+              <span class="badge" style="background:#F3E5F5;color:#6A1B9A;border:1px solid #CE93D8;">⚠️ Dieta Especial</span>
+              {% else %}
+              <span class="badge diet-{{ o_diet }}">
+                {% if o_diet=='corriente' %}Dieta Corriente{% elif o_diet=='blanda' %}Dieta Blanda{% else %}Dieta Líquida{% endif %}
               </span>
-              {% if p.condition != 'normal' %}
-              <span class="badge cond-{{ p.condition }}">{{ condition_label[p.condition] }}</span>
+              {% endif %}
+              {% if o_cond != 'normal' %}
+              <span class="badge cond-{{ o_cond }}">{{ condition_label[o_cond] }}</span>
               {% endif %}
             </div>
-            {% if p.condition != 'normal' and condition_notes[p.condition] %}
-            <div class="cond-note">⚠️ {{ condition_notes[p.condition] }}</div>
+            {% if o_cond != 'normal' and condition_notes[o_cond] %}
+            <div class="cond-note">⚠️ {{ condition_notes[o_cond] }}</div>
             {% endif %}
 
             {% if order %}
+              {% if o_cero %}
+                {# DIETA CERO — no preparar nada #}
+                <div style="background:#FDECEA;border:1.5px solid #F5C6C6;border-radius:10px;padding:14px 16px;margin:8px 0;text-align:center;">
+                  <div style="font-size:22px;margin-bottom:4px;">⛔</div>
+                  <div style="font-weight:700;color:#C0392B;font-size:15px;">DIETA CERO</div>
+                  <div style="color:#C0392B;font-size:12px;margin-top:4px;">No preparar alimentos para este tiempo de comida</div>
+                  {% if o_notes %}
+                  <div style="margin-top:8px;font-size:12px;color:#666;font-style:italic;">Nota: {{ o_notes }}</div>
+                  {% endif %}
+                </div>
+              {% elif o_diet == 'otra' %}
+                {# DIETA ESPECIAL — mostrar notas prominentemente #}
+                <div style="background:#F3E5F5;border:1.5px solid #CE93D8;border-radius:10px;padding:14px 16px;margin:8px 0;">
+                  <div style="font-weight:700;color:#6A1B9A;font-size:14px;margin-bottom:6px;">⚠️ DIETA ESPECIAL</div>
+                  {% if o_notes %}
+                  <div style="color:#4A148C;font-size:13px;line-height:1.5;">{{ o_notes }}</div>
+                  {% else %}
+                  <div style="color:#999;font-size:12px;font-style:italic;">Sin instrucciones adicionales registradas</div>
+                  {% endif %}
+                </div>
+              {% else %}
               {# Seleccionar opciones según tipo de dieta y condición #}
-              {% if p.condition == 'diabetico' %}
+              {% if o_cond == 'diabetico' %}
                 {% set opts = menu_diabetico[today_day][meal_key] %}
-              {% elif p.diet_type == 'corriente' %}
+              {% elif o_diet == 'corriente' %}
                 {% set opts = menu_normal[today_day][meal_key] %}
               {% else %}
-                {% set opts = diet_options[p.diet_type][meal_key] %}
+                {% set opts = diet_options[o_diet][meal_key] %}
               {% endif %}
               {% set selected_opts = order['options_selected'] if order['options_selected'] else '[]' %}
               <div class="options-grid" id="opts-{{ p.id }}-{{ meal_key }}">
@@ -250,6 +338,7 @@
               <div style="margin-bottom:10px;">
                 <button class="confirm-btn" onclick="saveOptions({{ p.id }},'{{ meal_key }}')">💾 Guardar selección</button>
               </div>
+              {% endif %}{# end dieta cero/otra/normal #}
 
               {% set cur_status = order['delivery_status'] if order['delivery_status'] else 'pendiente' %}
               <div class="status-bar" id="sbar-{{ p.id }}-{{ meal_key }}">

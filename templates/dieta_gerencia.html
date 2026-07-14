@@ -106,14 +106,6 @@
     padding:3px 8px; border-radius:5px; display:inline-block;
   }
   .meal-options { font-size:11px; color:var(--mid); margin-top:3px; line-height:1.5; }
-  .ds-badge { font-size:10px; font-weight:700; padding:2px 7px; border-radius:10px; display:inline-block; margin-top:3px; }
-  .ds-pendiente  { background:#F0EDE8; color:#999; }
-  .ds-recibido   { background:#E3F2FD; color:#1565C0; }
-  .ds-en_proceso { background:#FFF3E0; color:#E67E22; }
-  .ds-en_camino  { background:#FFFDE7; color:#F57F17; }
-  .ds-entregado  { background:#E8F5E9; color:#2E7D32; }
-  .diet-cero-cell { background:#FDECEA; border-left:3px solid #C0392B; border-radius:6px; padding:5px 8px; margin-top:2px; }
-  .diet-otra-cell { background:#F3E5F5; border-left:3px solid #6A1B9A; border-radius:6px; padding:5px 8px; margin-top:2px; }
   /* EMPTY */
   .empty-row td { text-align:center; padding:40px; color:var(--mid); }
   @media(max-width:768px) {
@@ -167,42 +159,19 @@
     </div>
     <div class="kpi proc">
       <div class="kpi-num">{{ status_counts.get('en_proceso', 0) }}</div>
-      <div class="kpi-label">👨‍🍳 En Proceso</div>
+      <div class="kpi-label">👨‍🍳 Comidas<br>En Proceso</div>
     </div>
     <div class="kpi cam">
       <div class="kpi-num">{{ status_counts.get('en_camino', 0) }}</div>
-      <div class="kpi-label">🚀 En Camino</div>
+      <div class="kpi-label">🚀 Comidas<br>En Camino</div>
     </div>
     <div class="kpi recv">
       <div class="kpi-num">{{ status_counts.get('recibido', 0) }}</div>
-      <div class="kpi-label">📥 Recibidos<br>en Cafetería</div>
+      <div class="kpi-label">📥 Pedidos<br>Recibidos en Cafetería</div>
     </div>
     <div class="kpi nurs">
       <div class="kpi-num">{{ status_counts.get('nurse_received', 0) }}</div>
-      <div class="kpi-label">🏥 Confirmados<br>por Enfermería</div>
-    </div>
-  </div>
-  <!-- KPIs Fila 3: Dietas especiales -->
-  <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:24px;">
-    <div class="kpi" style="border-top-color:#555;">
-      <div class="kpi-num">{{ status_counts.get('total_orders', 0) }}</div>
-      <div class="kpi-label">📋 Total comidas<br>registradas hoy</div>
-    </div>
-    <div class="kpi" style="border-top-color:#C0392B;">
-      <div class="kpi-num" style="color:#C0392B;">{{ status_counts.get('dieta_cero', 0) }}</div>
-      <div class="kpi-label">⛔ Dieta Cero<br>activas hoy</div>
-    </div>
-    <div class="kpi" style="border-top-color:#6A1B9A;">
-      <div class="kpi-num" style="color:#6A1B9A;">{{ status_counts.get('dieta_otra', 0) }}</div>
-      <div class="kpi-label">⚠️ Dieta Especial<br>activas hoy</div>
-    </div>
-    <div class="kpi" style="border-top-color:#E67E22;">
-      <div class="kpi-num" style="color:#E67E22;">{{ patients|length * 3 - status_counts.get('total_orders', 0) }}</div>
-      <div class="kpi-label">⏸ Comidas<br>sin registrar</div>
-    </div>
-    <div class="kpi" style="border-top-color:#2980B9;">
-      <div class="kpi-num" style="color:#2980B9;">{{ patients|length }}</div>
-      <div class="kpi-label">🛏️ Total pacientes<br>activos</div>
+      <div class="kpi-label">🏥 Comidas Confirmadas<br>por Enfermería</div>
     </div>
   </div>
 
@@ -258,9 +227,8 @@
             </td>
             <td>
               <span class="badge diet-{{ p.diet_type }}">
-                {% if p.diet_type=='corriente' %}Corriente{% elif p.diet_type=='blanda' %}Blanda{% elif p.diet_type=='liquida' %}Líquida{% else %}{{ p.diet_type }}{% endif %}
+                {% if p.diet_type=='corriente' %}Corriente{% elif p.diet_type=='blanda' %}Blanda{% else %}Líquida{% endif %}
               </span>
-              <div style="font-size:10px;color:var(--mid);margin-top:3px;">Base paciente</div>
             </td>
             <td>
               {% if p.condition == 'normal' %}
@@ -278,63 +246,20 @@
             {% for meal_key, _, _ in meal_times %}
             {% set order = orders_map.get((p.id, meal_key)) %}
             <td>
-              {% if not order %}
-                <span style="font-size:11px;color:#ccc;">— Sin registro</span>
-              {% else %}
-                {% set o_diet = order.get('diet_type') or p.diet_type %}
-                {% set o_cero = order.get('dieta_cero') %}
-                {% set o_notes = order.get('meal_notes') or '' %}
-                {% set o_status = order.get('delivery_status') or 'pendiente' %}
-                {% set o_cond = p.condition if p.condition and p.condition != 'normal' else (order.get('condition') or 'normal') %}
-
-                {# Badge de dieta por comida #}
-                {% if o_cero %}
-                  <div class="diet-cero-cell">
-                    <span style="font-size:11px;font-weight:700;color:#C0392B;">⛔ DIETA CERO</span>
-                  </div>
-                {% elif o_diet == 'otra' %}
-                  <div class="diet-otra-cell">
-                    <span style="font-size:11px;font-weight:700;color:#6A1B9A;">⚠️ DIETA ESPECIAL</span>
-                    {% if o_notes %}<div style="font-size:10px;color:#4A148C;margin-top:2px;">{{ o_notes }}</div>{% endif %}
-                  </div>
-                {% else %}
-                  <span class="badge diet-{{ o_diet }}" style="font-size:10px;">
-                    {% if o_diet=='corriente' %}Corriente{% elif o_diet=='blanda' %}Blanda{% elif o_diet=='liquida' %}Líquida{% else %}{{ o_diet }}{% endif %}
-                  </span>
-                  {% if o_diet != p.diet_type %}
-                  <span style="font-size:9px;color:#E67E22;margin-left:3px;">⚡ cambio</span>
-                  {% endif %}
-                  {# Opciones seleccionadas por cafetería #}
-                  {% if order.get('options_selected') and order['options_selected'] != '[]' %}
-                  <div style="font-size:10px;color:var(--mid);margin-top:3px;line-height:1.5;">
-                    {% for opt in order['options_selected']|replace('[','',1)|replace(']','',1)|replace('"','',)|split(', ') %}
-                    {% if opt.strip()|length > 2 %}· {{ opt.strip().strip('"') }}<br>{% endif %}
-                    {% endfor %}
-                  </div>
-                  {% endif %}
-                  {% if o_notes %}
-                  <div style="font-size:10px;color:#856404;margin-top:2px;">📝 {{ o_notes }}</div>
-                  {% endif %}
-                {% endif %}
-
-                {# Estado de entrega #}
-                <div>
-                  <span class="ds-badge ds-{{ o_status }}">
-                    {% if o_status=='pendiente' %}⏳ Pendiente
-                    {% elif o_status=='recibido' %}📥 Recibido
-                    {% elif o_status=='en_proceso' %}👨‍🍳 En proceso
-                    {% elif o_status=='en_camino' %}🚀 En camino
-                    {% elif o_status=='entregado' %}✅ Entregado
-                    {% endif %}
-                  </span>
-                  {% if order.get('nurse_received') %}
-                  <span class="ds-badge" style="background:#E8F5E9;color:#2E7D32;">🏥 Enf. recibió</span>
-                  {% endif %}
+              {% if order and order['confirmed'] %}
+                <span class="meal-confirmed">✅ Enviado</span>
+                {% if order['options_selected'] and order['options_selected'] != '[]' %}
+                <div class="meal-options">
+                  {% for opt in order['options_selected']|replace('[','',1)|replace(']','',1)|replace('"','',)|split(', ') %}
+                  {% if opt.strip()|length > 2 %}· {{ opt.strip().strip('"') }}<br>{% endif %}
+                  {% endfor %}
                 </div>
-
-                {% if order.get('extra_notes') %}
-                <div style="font-size:10px;color:#856404;margin-top:2px;">🗒 {{ order['extra_notes'] }}</div>
                 {% endif %}
+                {% if order['extra_notes'] %}
+                <div style="font-size:11px;color:#856404;margin-top:4px;">📝 {{ order['extra_notes'] }}</div>
+                {% endif %}
+              {% else %}
+                <span class="meal-pending">⏳ Pendiente</span>
               {% endif %}
             </td>
             {% endfor %}

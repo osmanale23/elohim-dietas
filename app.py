@@ -294,6 +294,15 @@ def init_db():
             updated_at    TEXT
         )
     ''')
+    # Agregar columnas nuevas si no existen (para BD ya creada con esquema viejo)
+    for stmt in [
+        "ALTER TABLE patients ADD COLUMN IF NOT EXISTS edad INTEGER",
+        "ALTER TABLE patients ADD COLUMN IF NOT EXISTS sexo TEXT DEFAULT 'masculino'",
+        "ALTER TABLE patients ADD COLUMN IF NOT EXISTS active INTEGER DEFAULT 1",
+        "ALTER TABLE patients ADD COLUMN IF NOT EXISTS registered_by TEXT",
+        "ALTER TABLE patients ADD COLUMN IF NOT EXISTS updated_at TEXT",
+    ]:
+        cur.execute(stmt)
     cur.execute('''
         CREATE TABLE IF NOT EXISTS meal_orders (
             id               SERIAL PRIMARY KEY,

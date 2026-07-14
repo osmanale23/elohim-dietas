@@ -652,7 +652,7 @@ def dieta_cafeteria():
     cur = conn.cursor(cursor_factory=RealDictCursor)
     cur.execute('SELECT * FROM patients WHERE active=1 ORDER BY floor, room')
     patients = cur.fetchall()
-    cur.execute('SELECT * FROM meal_orders WHERE order_date=%s', (today,))
+    cur.execute("SELECT * FROM meal_orders WHERE COALESCE(meal_date, order_date)=%s", (today,))
     orders = cur.fetchall()
     cur.close()
     conn.close()
@@ -753,7 +753,7 @@ def save_order():
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     cur.execute(
-        'SELECT id FROM meal_orders WHERE patient_id=%s AND order_date=%s AND meal_time=%s',
+        "SELECT id FROM meal_orders WHERE patient_id=%s AND COALESCE(meal_date, order_date)=%s AND meal_time=%s",
         (d['patient_id'], d['date'], d['meal_time'])
     )
     existing = cur.fetchone()
@@ -783,34 +783,34 @@ def dieta_gerencia():
     else:
         cur.execute('SELECT * FROM patients WHERE active=1 AND floor=%s ORDER BY room', (floor_filter,))
     patients = cur.fetchall()
-    cur.execute('SELECT * FROM meal_orders WHERE order_date=%s', (today,))
+    cur.execute("SELECT * FROM meal_orders WHERE COALESCE(meal_date, order_date)=%s", (today,))
     orders = cur.fetchall()
     # Pacientes activos por piso
     floor_counts = {}
     for fk in FLOOR_LABEL:
         cur.execute('SELECT COUNT(*) as cnt FROM patients WHERE active=1 AND floor=%s', (fk,))
         floor_counts[fk] = cur.fetchone()['cnt']
-    # Conteos por estado de entrega
+    # Conteos por estado de entrega (basados en meal_date del día seleccionado)
     status_counts = {}
     for st in ('recibido', 'en_proceso', 'en_camino', 'entregado'):
         cur.execute(
-            'SELECT COUNT(*) as cnt FROM meal_orders WHERE order_date=%s AND delivery_status=%s', (today, st)
+            "SELECT COUNT(*) as cnt FROM meal_orders WHERE COALESCE(meal_date, order_date)=%s AND delivery_status=%s", (today, st)
         )
         status_counts[st] = cur.fetchone()['cnt']
     cur.execute(
-        'SELECT COUNT(*) as cnt FROM meal_orders WHERE order_date=%s AND nurse_received=1', (today,)
+        "SELECT COUNT(*) as cnt FROM meal_orders WHERE COALESCE(meal_date, order_date)=%s AND nurse_received=1", (today,)
     )
     status_counts['nurse_received'] = cur.fetchone()['cnt']
     cur.execute(
-        'SELECT COUNT(*) as cnt FROM meal_orders WHERE order_date=%s AND dieta_cero=1', (today,)
+        "SELECT COUNT(*) as cnt FROM meal_orders WHERE COALESCE(meal_date, order_date)=%s AND dieta_cero=1", (today,)
     )
     status_counts['dieta_cero'] = cur.fetchone()['cnt']
     cur.execute(
-        "SELECT COUNT(*) as cnt FROM meal_orders WHERE order_date=%s AND diet_type='otra'", (today,)
+        "SELECT COUNT(*) as cnt FROM meal_orders WHERE COALESCE(meal_date, order_date)=%s AND diet_type='otra'", (today,)
     )
     status_counts['dieta_otra'] = cur.fetchone()['cnt']
     cur.execute(
-        'SELECT COUNT(*) as cnt FROM meal_orders WHERE order_date=%s', (today,)
+        "SELECT COUNT(*) as cnt FROM meal_orders WHERE COALESCE(meal_date, order_date)=%s", (today,)
     )
     status_counts['total_orders'] = cur.fetchone()['cnt']
     cur.close()

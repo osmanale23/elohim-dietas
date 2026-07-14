@@ -164,7 +164,7 @@ DAY_NAMES = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'dom
 MENU_NORMAL = {
     'lunes':     {
         'desayuno': ['Avena con galletas de soda'],
-        'almuerzo': ['Pescado a la plancha con mango y ensalada servida'],
+        'almuerzo': ['Pescado a la plancha con mangú y ensalada hervida'],
         'cena':     ['Quesadilla con jugo de lechosa y avena'],
     },
     'martes':    {
@@ -174,7 +174,7 @@ MENU_NORMAL = {
     },
     'miercoles': {
         'desayuno': ['Desayuno de frutas'],
-        'almuerzo': ['Trigo con pollo desmenuzado y ensalada servida'],
+        'almuerzo': ['Trigo con pollo desmenuzado y ensalada hervida'],
         'cena':     ['Jugo de pera/piña con tortilla de huevo'],
     },
     'jueves':    {
@@ -202,8 +202,8 @@ MENU_NORMAL = {
 MENU_DIABETICO = {
     'lunes':     {
         'desayuno': ['Pan integral con huevo revuelto y jugo'],
-        'almuerzo': ['Mango, ensalada hervida y carne molida'],
-        'cena':     ['Mango con queso'],
+        'almuerzo': ['Mangú, ensalada hervida y carne molida'],
+        'cena':     ['Mangú con queso'],
     },
     'martes':    {
         'desayuno': ['Guineos y huevos hervidos'],

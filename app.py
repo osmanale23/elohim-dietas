@@ -160,6 +160,13 @@ MEAL_TIMES = [
 
 # ─── MENÚS POR DÍA ──────────────────────────────────────────────────────────
 DAY_NAMES = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo']
+DAY_NAMES_ES = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+MONTH_NAMES_ES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+                  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+
+def today_label_es(d=None):
+    d = d or date.today()
+    return f"{DAY_NAMES_ES[d.weekday()]}, {d.day} de {MONTH_NAMES_ES[d.month - 1]} {d.year}"
 
 MENU_NORMAL = {
     'lunes':     {
@@ -329,6 +336,8 @@ def init_db():
         "ALTER TABLE meal_orders ADD COLUMN IF NOT EXISTS condition TEXT DEFAULT 'normal'",
         "ALTER TABLE meal_orders ADD COLUMN IF NOT EXISTS meal_notes TEXT DEFAULT ''",
         "ALTER TABLE meal_orders ADD COLUMN IF NOT EXISTS dieta_cero INTEGER DEFAULT 0",
+        "ALTER TABLE meal_orders ADD COLUMN IF NOT EXISTS updated_at TEXT",
+        "ALTER TABLE meal_orders ADD COLUMN IF NOT EXISTS updated_by TEXT",
     ]:
         cur.execute(stmt)
     conn.commit()
@@ -393,6 +402,7 @@ def dieta_nurse():
     role = session['dieta_role']
     today_str = date.today().strftime('%Y-%m-%d')
     today_day = DAY_NAMES[date.today().weekday()]
+    today_lbl = today_label_es()
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     cur.execute(
@@ -402,7 +412,9 @@ def dieta_nurse():
     cur.execute(
         '''SELECT mo.* FROM meal_orders mo
            JOIN patients p ON mo.patient_id = p.id
-           WHERE p.floor=%s AND p.active=1 AND mo.order_date=%s''',
+           WHERE p.floor=%s AND p.active=1
+             AND COALESCE(mo.meal_date, mo.order_date) >= %s
+           ORDER BY COALESCE(mo.meal_date, mo.order_date), mo.meal_time''',
         (role, today_str)
     )
     orders = cur.fetchall()
@@ -415,6 +427,7 @@ def dieta_nurse():
         transferable = cur.fetchall()
     cur.close()
     conn.close()
+    # orders_map: {patient_id: {date_str: {meal_time: order_dict}}}
     orders_map = {}
     for o in orders:
         row = dict(o)
@@ -422,16 +435,34 @@ def dieta_nurse():
             row['options_list'] = json.loads(row.get('options_selected') or '[]')
         except Exception:
             row['options_list'] = []
-        orders_map[(o['patient_id'], o['meal_time'])] = row
+        meal_d = row.get('meal_date') or row.get('order_date') or today_str
+        pid = o['patient_id']
+        if pid not in orders_map:
+            orders_map[pid] = {}
+        if meal_d not in orders_map[pid]:
+            orders_map[pid][meal_d] = {}
+        orders_map[pid][meal_d][o['meal_time']] = row
+    # Construir etiquetas de fecha para todas las fechas únicas en orders_map
+    date_labels = {}
+    for pid_map in orders_map.values():
+        for d_str in pid_map.keys():
+            if d_str not in date_labels:
+                try:
+                    d_obj = date.fromisoformat(d_str)
+                    date_labels[d_str] = today_label_es(d_obj)
+                except Exception:
+                    date_labels[d_str] = d_str
     return render_template('dieta_nurse.html',
                            patients=patients,
                            orders_map=orders_map,
+                           date_labels=date_labels,
                            transferable=transferable,
                            role=role,
                            role_name=ROLE_NAMES[role],
                            floor_label=FLOOR_LABEL[role],
                            today=today_str,
                            today_day=today_day,
+                           today_label=today_lbl,
                            menu_normal=MENU_NORMAL,
                            menu_diabetico=MENU_DIABETICO,
                            diet_options=DIET_OPTIONS,
@@ -621,7 +652,7 @@ def dieta_cafeteria():
     cur = conn.cursor(cursor_factory=RealDictCursor)
     cur.execute('SELECT * FROM patients WHERE active=1 ORDER BY floor, room')
     patients = cur.fetchall()
-    cur.execute('SELECT * FROM meal_orders WHERE order_date=%s', (today,))
+    cur.execute("SELECT * FROM meal_orders WHERE COALESCE(meal_date, order_date)=%s", (today,))
     orders = cur.fetchall()
     cur.close()
     conn.close()
@@ -689,6 +720,30 @@ def update_delivery_status():
     return jsonify({'ok': True})
 
 
+@app.route('/api/meal/<int:order_id>/edit', methods=['POST'])
+def edit_meal_order(order_id):
+    if nurse_required(): return jsonify({'error': 'unauthorized'}), 403
+    d = request.json
+    nurse = session.get('nurse_name') or session.get('dieta_role', 'enfermería')
+    now_str = datetime.now().isoformat(timespec='seconds')
+    dieta_cero = bool(d.get('dieta_cero'))
+    diet_type = 'cero' if dieta_cero else d.get('diet_type', 'corriente')
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        '''UPDATE meal_orders
+           SET diet_type=%s, condition=%s, meal_notes=%s, dieta_cero=%s,
+               updated_at=%s, updated_by=%s
+           WHERE id=%s''',
+        (diet_type, d.get('condition', 'normal'), d.get('meal_notes', ''),
+         1 if dieta_cero else 0, now_str, nurse, order_id)
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+    return jsonify({'ok': True, 'updated_at': now_str, 'updated_by': nurse})
+
+
 @app.route('/api/order/save', methods=['POST'])
 def save_order():
     if session.get('dieta_role') != 'cafeteria':
@@ -698,7 +753,7 @@ def save_order():
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     cur.execute(
-        'SELECT id FROM meal_orders WHERE patient_id=%s AND order_date=%s AND meal_time=%s',
+        "SELECT id FROM meal_orders WHERE patient_id=%s AND COALESCE(meal_date, order_date)=%s AND meal_time=%s",
         (d['patient_id'], d['date'], d['meal_time'])
     )
     existing = cur.fetchone()
@@ -728,24 +783,36 @@ def dieta_gerencia():
     else:
         cur.execute('SELECT * FROM patients WHERE active=1 AND floor=%s ORDER BY room', (floor_filter,))
     patients = cur.fetchall()
-    cur.execute('SELECT * FROM meal_orders WHERE order_date=%s', (today,))
+    cur.execute("SELECT * FROM meal_orders WHERE COALESCE(meal_date, order_date)=%s", (today,))
     orders = cur.fetchall()
     # Pacientes activos por piso
     floor_counts = {}
     for fk in FLOOR_LABEL:
         cur.execute('SELECT COUNT(*) as cnt FROM patients WHERE active=1 AND floor=%s', (fk,))
         floor_counts[fk] = cur.fetchone()['cnt']
-    # Conteos por estado de entrega
+    # Conteos por estado de entrega (basados en meal_date del día seleccionado)
     status_counts = {}
     for st in ('recibido', 'en_proceso', 'en_camino', 'entregado'):
         cur.execute(
-            'SELECT COUNT(*) as cnt FROM meal_orders WHERE order_date=%s AND delivery_status=%s', (today, st)
+            "SELECT COUNT(*) as cnt FROM meal_orders WHERE COALESCE(meal_date, order_date)=%s AND delivery_status=%s", (today, st)
         )
         status_counts[st] = cur.fetchone()['cnt']
     cur.execute(
-        'SELECT COUNT(*) as cnt FROM meal_orders WHERE order_date=%s AND nurse_received=1', (today,)
+        "SELECT COUNT(*) as cnt FROM meal_orders WHERE COALESCE(meal_date, order_date)=%s AND nurse_received=1", (today,)
     )
     status_counts['nurse_received'] = cur.fetchone()['cnt']
+    cur.execute(
+        "SELECT COUNT(*) as cnt FROM meal_orders WHERE COALESCE(meal_date, order_date)=%s AND dieta_cero=1", (today,)
+    )
+    status_counts['dieta_cero'] = cur.fetchone()['cnt']
+    cur.execute(
+        "SELECT COUNT(*) as cnt FROM meal_orders WHERE COALESCE(meal_date, order_date)=%s AND diet_type='otra'", (today,)
+    )
+    status_counts['dieta_otra'] = cur.fetchone()['cnt']
+    cur.execute(
+        "SELECT COUNT(*) as cnt FROM meal_orders WHERE COALESCE(meal_date, order_date)=%s", (today,)
+    )
+    status_counts['total_orders'] = cur.fetchone()['cnt']
     cur.close()
     conn.close()
     orders_map = {(o['patient_id'], o['meal_time']): dict(o) for o in orders}

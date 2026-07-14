@@ -318,19 +318,25 @@
                   {% endif %}
                 </div>
               {% else %}
-              {# Menú fijo según condición y tipo de dieta #}
+              {# Seleccionar opciones según tipo de dieta y condición #}
               {% if o_cond == 'diabetico' %}
-                {% set menu_item = menu_diabetico[today_day][meal_key] %}
+                {% set opts = menu_diabetico[today_day][meal_key] %}
               {% elif o_diet == 'corriente' %}
-                {% set menu_item = menu_normal[today_day][meal_key] %}
+                {% set opts = menu_normal[today_day][meal_key] %}
               {% else %}
-                {% set menu_item = diet_options[o_diet][meal_key] %}
+                {% set opts = diet_options[o_diet][meal_key] %}
               {% endif %}
-              <div style="background:#F5FAF7;border-left:3px solid var(--green-l);border-radius:8px;padding:10px 14px;margin:8px 0;">
-                <div style="font-size:10px;color:var(--mid);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">🍽️ Menú del día:</div>
-                {% for item in menu_item %}
-                <div style="font-size:13px;color:var(--dark);font-weight:500;">{{ item }}</div>
+              {% set selected_opts = order['options_selected'] if order['options_selected'] else '[]' %}
+              <div class="options-grid" id="opts-{{ p.id }}-{{ meal_key }}">
+                {% for opt in opts %}
+                <label class="option-item {% if opt in selected_opts %}selected{% endif %}" onclick="toggleOption(this)">
+                  <input type="checkbox" value="{{ opt }}" {% if opt in selected_opts %}checked{% endif %}>
+                  {{ opt }}
+                </label>
                 {% endfor %}
+              </div>
+              <div style="margin-bottom:10px;">
+                <button class="confirm-btn" onclick="saveOptions({{ p.id }},'{{ meal_key }}')">💾 Guardar selección</button>
               </div>
               {% endif %}{# end dieta cero/otra/normal #}
 

@@ -431,7 +431,7 @@ body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
             {% elif not ord.get('dieta_cero') and od not in ('cero','otra') %}
               {# Mostrar menú esperado del día #}
               {% set od_diet = od or 'corriente' %}
-              {% set od_cond = p.condition if p.condition and p.condition != 'normal' else (ord.get('condition') or 'normal') %}
+              {% set od_cond = ord.get('condition') or 'normal' %}
               {% if od_cond == 'diabetico' %}
                 {% set expected = menu_diabetico.get(today_day, {}).get(mk, []) %}
               {% elif od_diet == 'corriente' %}

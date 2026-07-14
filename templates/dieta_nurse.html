@@ -420,13 +420,33 @@ body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
               </button>
               {% endif %}
             </div>
-            {% if ord.get('options_list') %}
+            {% set food_list = ord.get('options_list') or [] %}
+            {% if food_list %}
             <div style="margin-top:8px;padding:8px 10px;background:#F7FBF8;border-left:3px solid var(--green-l);border-radius:6px;">
               <div style="font-size:10px;color:var(--mid);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">🍽️ Seleccionado por Cafetería:</div>
-              {% for item in ord['options_list'] %}
+              {% for item in food_list %}
               <div style="font-size:12px;color:var(--dark);padding:1px 0;">• {{ item }}</div>
               {% endfor %}
             </div>
+            {% elif not ord.get('dieta_cero') and od not in ('cero','otra') %}
+              {# Mostrar menú esperado del día #}
+              {% set od_diet = od or 'corriente' %}
+              {% set od_cond = ord.get('condition') or 'normal' %}
+              {% if od_cond == 'diabetico' %}
+                {% set expected = menu_diabetico.get(today_day, {}).get(mk, []) %}
+              {% elif od_diet == 'corriente' %}
+                {% set expected = menu_normal.get(today_day, {}).get(mk, []) %}
+              {% else %}
+                {% set expected = diet_options.get(od_diet, {}).get(mk, []) %}
+              {% endif %}
+              {% if expected %}
+              <div style="margin-top:8px;padding:8px 10px;background:#F5FAF7;border-left:3px solid #A8D5B5;border-radius:6px;">
+                <div style="font-size:10px;color:#5A8A6A;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">🗓️ Menú del día (esperado):</div>
+                {% for item in expected %}
+                <div style="font-size:12px;color:#2E5A3A;padding:1px 0;">• {{ item }}</div>
+                {% endfor %}
+              </div>
+              {% endif %}
             {% endif %}
           </div>
           {% endif %}

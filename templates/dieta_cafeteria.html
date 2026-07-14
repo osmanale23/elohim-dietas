@@ -272,7 +272,7 @@
         {% for p in floor_patients %}
           {% set order = orders_map.get((p.id, meal_key)) %}
           {% set o_diet = order.diet_type if order and order.diet_type else p.diet_type %}
-          {% set o_cond = order.condition if order and order.condition else p.condition %}
+          {% set o_cond = p.condition if p.condition and p.condition != 'normal' else (order.condition if order and order.condition and order.condition != 'normal' else 'normal') %}
           {% set o_cero = order.dieta_cero if order else 0 %}
           {% set o_notes = order.meal_notes if order and order.meal_notes else '' %}
           <div class="patient-row floor-{{ p.floor }}">

@@ -377,96 +377,109 @@ body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
         {% endif %}
       </div>
 
-      <!-- COMIDAS REGISTRADAS HOY -->
+      <!-- HISTORIAL DE COMIDAS (agrupado por fecha) -->
       <div class="meals-section" id="drow-{{ p.id }}">
         {% set ds_labels = {'pendiente':'Pendiente','recibido':'Recibido','en_proceso':'En Proceso','en_camino':'En Camino','entregado':'Entregado'} %}
         {% set meal_icons = {'desayuno':'🌅','almuerzo':'☀️','cena':'🌙'} %}
         {% set meal_names  = {'desayuno':'Desayuno','almuerzo':'Almuerzo','cena':'Cena'} %}
-        {% for mk in ['desayuno','almuerzo','cena'] %}
-          {% set ord = orders_map.get((p.id, mk)) %}
-          {% if ord %}
-          <div class="meal-row">
-            <div class="meal-header">
-              <span class="meal-label">{{ meal_icons[mk] }} {{ meal_names[mk] }}</span>
-              <span class="ds-badge ds-{{ ord['delivery_status'] or 'pendiente' }}" id="ds-{{ p.id }}-{{ mk }}">
-                {{ ds_labels[ord['delivery_status'] or 'pendiente'] }}
-              </span>
+        {% set p_orders = orders_map.get(p.id, {}) %}
+        {% if p_orders %}
+          {% for meal_date_key in p_orders.keys()|sort %}
+            {% set date_meals = p_orders[meal_date_key] %}
+            {# Cabecera de fecha #}
+            {% if meal_date_key == today %}
+            <div style="font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:1px;padding:6px 0 4px 0;border-bottom:1.5px solid var(--green-l);margin-bottom:6px;">
+              📅 Hoy — {{ date_labels.get(meal_date_key, meal_date_key) }}
             </div>
-            <!-- Fecha de esta comida (si es diferente a hoy) -->
-            {% if ord.get('meal_date') and ord['meal_date'] != today %}
-            <div style="font-size:11px;color:#E65100;font-weight:700;margin-bottom:4px;">📅 Para el {{ ord['meal_date'] }}</div>
-            {% elif ord.get('meal_date') %}
-            <div style="font-size:11px;color:var(--mid);margin-bottom:4px;">📅 {{ ord['meal_date'] }}</div>
-            {% endif %}
-            <!-- Dieta de esta comida específica -->
-            {% set od = ord.get('diet_type') or 'corriente' %}
-            {% if ord.get('dieta_cero') %}
-            <div class="dieta-cero-alert">⛔ DIETA CERO para este tiempo</div>
             {% else %}
-            <span class="meal-diet-badge diet-{{ od }}">
-              {% if od == 'corriente' %}Corriente
-              {% elif od == 'blanda' %}Blanda
-              {% elif od == 'liquida' %}Líquida
-              {% elif od == 'cero' %}Dieta Cero
-              {% elif od == 'otra' %}Dieta Especial
-              {% else %}{{ od }}{% endif %}
-            </span>
-            {% endif %}
-            {% if ord.get('meal_notes') %}
-            <div class="meal-notes-text">📝 {{ ord['meal_notes'] }}</div>
-            {% endif %}
-            <!-- Audit trail: quién editó y cuándo -->
-            {% if ord.get('updated_at') %}
-            <div style="font-size:10px;color:#B71C1C;background:#FFF3E0;border-left:3px solid #FF6D00;padding:4px 8px;border-radius:4px;margin-top:6px;">
-              ✏️ Modificado por <strong>{{ ord['updated_by'] or '—' }}</strong> el {{ ord['updated_at'][:10] }} a las {{ ord['updated_at'][11:16] }}
+            <div style="font-size:11px;font-weight:700;color:#E65100;text-transform:uppercase;letter-spacing:1px;padding:6px 0 4px 0;border-bottom:1.5px solid #FFCC80;margin-bottom:6px;margin-top:10px;">
+              📅 {{ date_labels.get(meal_date_key, meal_date_key) }}
             </div>
             {% endif %}
-            <!-- Botones Marcar Recibido + Editar -->
-            <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-              {% if ord.get('nurse_received') %}
-              <span class="recv-stamp" id="recv-{{ p.id }}-{{ mk }}">✓ Recibido por enfermería</span>
-              {% else %}
-              <button class="recv-btn" id="recv-{{ p.id }}-{{ mk }}"
-                onclick="marcarRecibido({{ p.id }}, '{{ mk }}', this)">
-                Marcar como Recibido
-              </button>
-              {% endif %}
-              <button onclick="openEditMeal({{ ord['id'] }}, '{{ od }}', '{{ ord.get('condition','normal') }}', {{ ord.get('dieta_cero',0) }}, {{ (ord.get('meal_notes') or '')|tojson }})"
-                style="background:#F3E5F5;color:#6A1B9A;border:1px solid #CE93D8;border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;">
-                ✏️ Editar
-              </button>
-            </div>
-            {% set food_list = ord.get('options_list') or [] %}
-            {% if food_list %}
-            <div style="margin-top:8px;padding:8px 10px;background:#F7FBF8;border-left:3px solid var(--green-l);border-radius:6px;">
-              <div style="font-size:10px;color:var(--mid);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">🍽️ Seleccionado por Cafetería:</div>
-              {% for item in food_list %}
-              <div style="font-size:12px;color:var(--dark);padding:1px 0;">• {{ item }}</div>
-              {% endfor %}
-            </div>
-            {% elif not ord.get('dieta_cero') and od not in ('cero','otra') %}
-              {# Mostrar menú esperado del día #}
-              {% set od_diet = od or 'corriente' %}
-              {% set od_cond = p.condition if p.condition and p.condition != 'normal' else (ord.get('condition') or 'normal') %}
-              {% if od_cond == 'diabetico' %}
-                {% set expected = menu_diabetico.get(today_day, {}).get(mk, []) %}
-              {% elif od_diet == 'corriente' %}
-                {% set expected = menu_normal.get(today_day, {}).get(mk, []) %}
-              {% else %}
-                {% set expected = diet_options.get(od_diet, {}).get(mk, []) %}
-              {% endif %}
-              {% if expected %}
-              <div style="margin-top:8px;padding:8px 10px;background:#F5FAF7;border-left:3px solid #A8D5B5;border-radius:6px;">
-                <div style="font-size:10px;color:#5A8A6A;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">🗓️ Menú del día (esperado):</div>
-                {% for item in expected %}
-                <div style="font-size:12px;color:#2E5A3A;padding:1px 0;">• {{ item }}</div>
-                {% endfor %}
+            {# Comidas de ese día #}
+            {% for mk in ['desayuno','almuerzo','cena'] %}
+              {% set ord = date_meals.get(mk) %}
+              {% if ord %}
+              {% set od = ord.get('diet_type') or 'corriente' %}
+              <div class="meal-row">
+                <div class="meal-header">
+                  <span class="meal-label">{{ meal_icons[mk] }} {{ meal_names[mk] }}</span>
+                  <span class="ds-badge ds-{{ ord['delivery_status'] or 'pendiente' }}" id="ds-{{ p.id }}-{{ meal_date_key }}-{{ mk }}">
+                    {{ ds_labels[ord['delivery_status'] or 'pendiente'] }}
+                  </span>
+                </div>
+                <!-- Dieta de esta comida específica -->
+                {% if ord.get('dieta_cero') %}
+                <div class="dieta-cero-alert">⛔ DIETA CERO para este tiempo</div>
+                {% else %}
+                <span class="meal-diet-badge diet-{{ od }}">
+                  {% if od == 'corriente' %}Corriente
+                  {% elif od == 'blanda' %}Blanda
+                  {% elif od == 'liquida' %}Líquida
+                  {% elif od == 'cero' %}Dieta Cero
+                  {% elif od == 'otra' %}Dieta Especial
+                  {% else %}{{ od }}{% endif %}
+                </span>
+                {% endif %}
+                {% if ord.get('meal_notes') %}
+                <div class="meal-notes-text">📝 {{ ord['meal_notes'] }}</div>
+                {% endif %}
+                <!-- Audit trail -->
+                {% if ord.get('updated_at') %}
+                <div style="font-size:10px;color:#B71C1C;background:#FFF3E0;border-left:3px solid #FF6D00;padding:4px 8px;border-radius:4px;margin-top:6px;">
+                  ✏️ Modificado por <strong>{{ ord['updated_by'] or '—' }}</strong> el {{ ord['updated_at'][:10] }} a las {{ ord['updated_at'][11:16] }}
+                </div>
+                {% endif %}
+                <!-- Botones -->
+                <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                  {% if ord.get('nurse_received') %}
+                  <span class="recv-stamp" id="recv-{{ p.id }}-{{ meal_date_key }}-{{ mk }}">✓ Recibido por enfermería</span>
+                  {% else %}
+                  <button class="recv-btn" id="recv-{{ p.id }}-{{ meal_date_key }}-{{ mk }}"
+                    onclick="marcarRecibido({{ p.id }}, '{{ mk }}', this)">
+                    Marcar como Recibido
+                  </button>
+                  {% endif %}
+                  <button onclick="openEditMeal({{ ord['id'] }}, '{{ od }}', '{{ ord.get('condition','normal') }}', {{ ord.get('dieta_cero',0) }}, {{ (ord.get('meal_notes') or '')|tojson }})"
+                    style="background:#F3E5F5;color:#6A1B9A;border:1px solid #CE93D8;border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;">
+                    ✏️ Editar
+                  </button>
+                </div>
+                <!-- Menú esperado -->
+                {% set food_list = ord.get('options_list') or [] %}
+                {% if food_list %}
+                <div style="margin-top:8px;padding:8px 10px;background:#F7FBF8;border-left:3px solid var(--green-l);border-radius:6px;">
+                  <div style="font-size:10px;color:var(--mid);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">🍽️ Seleccionado por Cafetería:</div>
+                  {% for item in food_list %}
+                  <div style="font-size:12px;color:var(--dark);padding:1px 0;">• {{ item }}</div>
+                  {% endfor %}
+                </div>
+                {% elif not ord.get('dieta_cero') and od not in ('cero','otra') %}
+                  {% set od_diet = od or 'corriente' %}
+                  {% set od_cond = p.condition if p.condition and p.condition != 'normal' else (ord.get('condition') or 'normal') %}
+                  {# Menú esperado según el día de semana de la comida, no necesariamente hoy #}
+                  {% set mk_day_names = ['lunes','martes','miercoles','jueves','viernes','sabado','domingo'] %}
+                  {% if od_cond == 'diabetico' %}
+                    {% set expected = menu_diabetico.get(today_day, {}).get(mk, []) %}
+                  {% elif od_diet == 'corriente' %}
+                    {% set expected = menu_normal.get(today_day, {}).get(mk, []) %}
+                  {% else %}
+                    {% set expected = diet_options.get(od_diet, {}).get(mk, []) %}
+                  {% endif %}
+                  {% if expected %}
+                  <div style="margin-top:8px;padding:8px 10px;background:#F5FAF7;border-left:3px solid #A8D5B5;border-radius:6px;">
+                    <div style="font-size:10px;color:#5A8A6A;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">🗓️ Menú del día (esperado):</div>
+                    {% for item in expected %}
+                    <div style="font-size:12px;color:#2E5A3A;padding:1px 0;">• {{ item }}</div>
+                    {% endfor %}
+                  </div>
+                  {% endif %}
+                {% endif %}
               </div>
               {% endif %}
-            {% endif %}
-          </div>
-          {% endif %}
-        {% endfor %}
+            {% endfor %}
+          {% endfor %}
+        {% endif %}
       </div>
 
       <div class="card-actions">

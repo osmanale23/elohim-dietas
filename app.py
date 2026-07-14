@@ -412,7 +412,9 @@ def dieta_nurse():
     cur.execute(
         '''SELECT mo.* FROM meal_orders mo
            JOIN patients p ON mo.patient_id = p.id
-           WHERE p.floor=%s AND p.active=1 AND mo.order_date=%s''',
+           WHERE p.floor=%s AND p.active=1
+             AND COALESCE(mo.meal_date, mo.order_date) >= %s
+           ORDER BY COALESCE(mo.meal_date, mo.order_date), mo.meal_time''',
         (role, today_str)
     )
     orders = cur.fetchall()
@@ -425,6 +427,7 @@ def dieta_nurse():
         transferable = cur.fetchall()
     cur.close()
     conn.close()
+    # orders_map: {patient_id: {date_str: {meal_time: order_dict}}}
     orders_map = {}
     for o in orders:
         row = dict(o)
@@ -432,10 +435,27 @@ def dieta_nurse():
             row['options_list'] = json.loads(row.get('options_selected') or '[]')
         except Exception:
             row['options_list'] = []
-        orders_map[(o['patient_id'], o['meal_time'])] = row
+        meal_d = row.get('meal_date') or row.get('order_date') or today_str
+        pid = o['patient_id']
+        if pid not in orders_map:
+            orders_map[pid] = {}
+        if meal_d not in orders_map[pid]:
+            orders_map[pid][meal_d] = {}
+        orders_map[pid][meal_d][o['meal_time']] = row
+    # Construir etiquetas de fecha para todas las fechas únicas en orders_map
+    date_labels = {}
+    for pid_map in orders_map.values():
+        for d_str in pid_map.keys():
+            if d_str not in date_labels:
+                try:
+                    d_obj = date.fromisoformat(d_str)
+                    date_labels[d_str] = today_label_es(d_obj)
+                except Exception:
+                    date_labels[d_str] = d_str
     return render_template('dieta_nurse.html',
                            patients=patients,
                            orders_map=orders_map,
+                           date_labels=date_labels,
                            transferable=transferable,
                            role=role,
                            role_name=ROLE_NAMES[role],

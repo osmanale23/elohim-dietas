@@ -746,6 +746,18 @@ def dieta_gerencia():
         'SELECT COUNT(*) as cnt FROM meal_orders WHERE order_date=%s AND nurse_received=1', (today,)
     )
     status_counts['nurse_received'] = cur.fetchone()['cnt']
+    cur.execute(
+        'SELECT COUNT(*) as cnt FROM meal_orders WHERE order_date=%s AND dieta_cero=1', (today,)
+    )
+    status_counts['dieta_cero'] = cur.fetchone()['cnt']
+    cur.execute(
+        "SELECT COUNT(*) as cnt FROM meal_orders WHERE order_date=%s AND diet_type='otra'", (today,)
+    )
+    status_counts['dieta_otra'] = cur.fetchone()['cnt']
+    cur.execute(
+        'SELECT COUNT(*) as cnt FROM meal_orders WHERE order_date=%s', (today,)
+    )
+    status_counts['total_orders'] = cur.fetchone()['cnt']
     cur.close()
     conn.close()
     orders_map = {(o['patient_id'], o['meal_time']): dict(o) for o in orders}

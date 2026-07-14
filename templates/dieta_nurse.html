@@ -457,12 +457,12 @@ body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
                 {% elif not ord.get('dieta_cero') and od not in ('cero','otra') %}
                   {% set od_diet = od or 'corriente' %}
                   {% set od_cond = p.condition if p.condition and p.condition != 'normal' else (ord.get('condition') or 'normal') %}
-                  {# Menú esperado según el día de semana de la comida, no necesariamente hoy #}
-                  {% set mk_day_names = ['lunes','martes','miercoles','jueves','viernes','sabado','domingo'] %}
+                  {# Usar el día de semana REAL de esta comida, calculado en el backend #}
+                  {% set ord_day = ord.get('meal_day') or today_day %}
                   {% if od_cond == 'diabetico' %}
-                    {% set expected = menu_diabetico.get(today_day, {}).get(mk, []) %}
+                    {% set expected = menu_diabetico.get(ord_day, {}).get(mk, []) %}
                   {% elif od_diet == 'corriente' %}
-                    {% set expected = menu_normal.get(today_day, {}).get(mk, []) %}
+                    {% set expected = menu_normal.get(ord_day, {}).get(mk, []) %}
                   {% else %}
                     {% set expected = diet_options.get(od_diet, {}).get(mk, []) %}
                   {% endif %}

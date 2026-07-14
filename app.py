@@ -329,6 +329,8 @@ def init_db():
         "ALTER TABLE meal_orders ADD COLUMN IF NOT EXISTS condition TEXT DEFAULT 'normal'",
         "ALTER TABLE meal_orders ADD COLUMN IF NOT EXISTS meal_notes TEXT DEFAULT ''",
         "ALTER TABLE meal_orders ADD COLUMN IF NOT EXISTS dieta_cero INTEGER DEFAULT 0",
+        "ALTER TABLE meal_orders ADD COLUMN IF NOT EXISTS updated_at TEXT",
+        "ALTER TABLE meal_orders ADD COLUMN IF NOT EXISTS updated_by TEXT",
     ]:
         cur.execute(stmt)
     conn.commit()
@@ -687,6 +689,30 @@ def update_delivery_status():
     cur.close()
     conn.close()
     return jsonify({'ok': True})
+
+
+@app.route('/api/meal/<int:order_id>/edit', methods=['POST'])
+def edit_meal_order(order_id):
+    if nurse_required(): return jsonify({'error': 'unauthorized'}), 403
+    d = request.json
+    nurse = session.get('nurse_name') or session.get('dieta_role', 'enfermería')
+    now_str = datetime.now().isoformat(timespec='seconds')
+    dieta_cero = bool(d.get('dieta_cero'))
+    diet_type = 'cero' if dieta_cero else d.get('diet_type', 'corriente')
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        '''UPDATE meal_orders
+           SET diet_type=%s, condition=%s, meal_notes=%s, dieta_cero=%s,
+               updated_at=%s, updated_by=%s
+           WHERE id=%s''',
+        (diet_type, d.get('condition', 'normal'), d.get('meal_notes', ''),
+         1 if dieta_cero else 0, now_str, nurse, order_id)
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+    return jsonify({'ok': True, 'updated_at': now_str, 'updated_by': nurse})
 
 
 @app.route('/api/order/save', methods=['POST'])

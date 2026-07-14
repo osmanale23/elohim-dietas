@@ -392,6 +392,12 @@ body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
                 {{ ds_labels[ord['delivery_status'] or 'pendiente'] }}
               </span>
             </div>
+            <!-- Fecha de esta comida (si es diferente a hoy) -->
+            {% if ord.get('meal_date') and ord['meal_date'] != today %}
+            <div style="font-size:11px;color:#E65100;font-weight:700;margin-bottom:4px;">📅 Para el {{ ord['meal_date'] }}</div>
+            {% elif ord.get('meal_date') %}
+            <div style="font-size:11px;color:var(--mid);margin-bottom:4px;">📅 {{ ord['meal_date'] }}</div>
+            {% endif %}
             <!-- Dieta de esta comida específica -->
             {% set od = ord.get('diet_type') or 'corriente' %}
             {% if ord.get('dieta_cero') %}
@@ -409,8 +415,14 @@ body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
             {% if ord.get('meal_notes') %}
             <div class="meal-notes-text">📝 {{ ord['meal_notes'] }}</div>
             {% endif %}
-            <!-- Botón Marcar Recibido -->
-            <div style="margin-top:8px;">
+            <!-- Audit trail: quién editó y cuándo -->
+            {% if ord.get('updated_at') %}
+            <div style="font-size:10px;color:#B71C1C;background:#FFF3E0;border-left:3px solid #FF6D00;padding:4px 8px;border-radius:4px;margin-top:6px;">
+              ✏️ Modificado por <strong>{{ ord['updated_by'] or '—' }}</strong> el {{ ord['updated_at'][:10] }} a las {{ ord['updated_at'][11:16] }}
+            </div>
+            {% endif %}
+            <!-- Botones Marcar Recibido + Editar -->
+            <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
               {% if ord.get('nurse_received') %}
               <span class="recv-stamp" id="recv-{{ p.id }}-{{ mk }}">✓ Recibido por enfermería</span>
               {% else %}
@@ -419,6 +431,10 @@ body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
                 Marcar como Recibido
               </button>
               {% endif %}
+              <button onclick="openEditMeal({{ ord['id'] }}, '{{ od }}', '{{ ord.get('condition','normal') }}', {{ ord.get('dieta_cero',0) }}, {{ (ord.get('meal_notes') or '')|tojson }})"
+                style="background:#F3E5F5;color:#6A1B9A;border:1px solid #CE93D8;border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;">
+                ✏️ Editar
+              </button>
             </div>
             {% set food_list = ord.get('options_list') or [] %}
             {% if food_list %}
@@ -553,6 +569,49 @@ body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
     <div class="modal-actions">
       <button class="cancel-btn" onclick="closeAddMeal()">Cancelar</button>
       <button class="save-btn" onclick="saveAddMeal()">Registrar Comida</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL EDITAR PEDIDO DE COMIDA -->
+<div class="modal-overlay" id="editMealModal">
+  <div class="modal">
+    <div class="modal-title">✏️ Editar Pedido de Comida</div>
+    <p style="font-size:12px;color:#B71C1C;background:#FFF3E0;border-left:3px solid #FF6D00;padding:8px 12px;border-radius:6px;margin-bottom:16px;">
+      ⚠️ Se registrará la hora exacta de esta modificación junto a tu nombre para auditoría.
+    </p>
+    <div class="dieta-cero-toggle" onclick="toggleEditDietaCero()">
+      <input type="checkbox" id="editDietaCeroCheck">
+      <label for="editDietaCeroCheck">⛔ DIETA CERO — No preparar alimentos</label>
+    </div>
+    <div id="editMealDetailsSection">
+      <div class="form-group">
+        <label>Tipo de Dieta</label>
+        <select id="editMealDiet">
+          <option value="corriente">Dieta Corriente</option>
+          <option value="blanda">Dieta Blanda</option>
+          <option value="liquida">Dieta Líquida</option>
+          <option value="otra">Otra (especificar en notas)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Condición Especial</label>
+        <select id="editMealCondition">
+          <option value="normal">Sin condición especial</option>
+          <option value="diabetico">Diabético</option>
+          <option value="renal">Insuficiencia Renal</option>
+          <option value="disfagia">Disfagia</option>
+          <option value="cardiopatia">Cardiopatía</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Observaciones</label>
+        <textarea id="editMealNotes" placeholder="Ej: cambio de dieta por indicación médica..."></textarea>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="cancel-btn" onclick="closeEditMeal()">Cancelar</button>
+      <button class="save-btn" onclick="saveEditMeal()">💾 Guardar Cambios</button>
     </div>
   </div>
 </div>
@@ -808,6 +867,49 @@ async function saveAdd() {
     })
   });
   if ((await r.json()).ok) { showToast('Paciente registrado ✓'); setTimeout(()=>location.reload(), 1000); }
+}
+
+// ── EDITAR PEDIDO DE COMIDA ───────────────────────────────────
+let _editOrderId = null;
+function openEditMeal(orderId, diet, condition, dietaCero, notes) {
+  _editOrderId = orderId;
+  document.getElementById('editDietaCeroCheck').checked = !!dietaCero;
+  toggleEditDietaCero();
+  document.getElementById('editMealDiet').value = diet || 'corriente';
+  document.getElementById('editMealCondition').value = condition || 'normal';
+  document.getElementById('editMealNotes').value = notes || '';
+  document.getElementById('editMealModal').classList.add('active');
+}
+function closeEditMeal() {
+  document.getElementById('editMealModal').classList.remove('active');
+  _editOrderId = null;
+}
+function toggleEditDietaCero() {
+  const checked = document.getElementById('editDietaCeroCheck').checked;
+  const sec = document.getElementById('editMealDetailsSection');
+  sec.style.opacity = checked ? '0.4' : '1';
+  sec.style.pointerEvents = checked ? 'none' : 'auto';
+}
+async function saveEditMeal() {
+  if (!_editOrderId) return;
+  const dieta_cero = document.getElementById('editDietaCeroCheck').checked;
+  const r = await fetch(`/api/meal/${_editOrderId}/edit`, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      diet_type: dieta_cero ? 'cero' : document.getElementById('editMealDiet').value,
+      condition: document.getElementById('editMealCondition').value,
+      meal_notes: document.getElementById('editMealNotes').value,
+      dieta_cero: dieta_cero,
+    })
+  });
+  const res = await r.json();
+  if (res.ok) {
+    showToast('✏️ Pedido actualizado — ' + res.updated_at.slice(11,16));
+    setTimeout(() => location.reload(), 1000);
+  } else {
+    showToast('❌ Error al guardar');
+  }
+  closeEditMeal();
 }
 
 // ── MARCAR RECIBIDO ───────────────────────────────────────────

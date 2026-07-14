@@ -821,16 +821,29 @@ def dieta_gerencia():
     status_counts['total_orders'] = cur.fetchone()['cnt']
     cur.close()
     conn.close()
-    orders_map = {(o['patient_id'], o['meal_time']): dict(o) for o in orders}
+    orders_map = {}
+    for o in orders:
+        row = dict(o)
+        meal_d = row.get('meal_date') or row.get('order_date') or today
+        try:
+            meal_d_obj = date.fromisoformat(meal_d)
+            row['meal_day'] = DAY_NAMES[meal_d_obj.weekday()]
+        except Exception:
+            row['meal_day'] = today_day
+        orders_map[(o['patient_id'], o['meal_time'])] = row
+    today_day = DAY_NAMES[datetime.strptime(today, '%Y-%m-%d').weekday()]
     return render_template('dieta_gerencia.html',
                            patients=patients,
                            orders_map=orders_map,
                            today=today,
+                           today_day=today_day,
                            floor_filter=floor_filter,
                            floor_counts=floor_counts,
                            status_counts=status_counts,
                            meal_times=MEAL_TIMES,
                            diet_options=DIET_OPTIONS,
+                           menu_normal=MENU_NORMAL,
+                           menu_diabetico=MENU_DIABETICO,
                            condition_notes=CONDITION_NOTES,
                            condition_label=CONDITION_LABEL,
                            floor_label=FLOOR_LABEL)

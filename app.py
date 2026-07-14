@@ -436,6 +436,12 @@ def dieta_nurse():
         except Exception:
             row['options_list'] = []
         meal_d = row.get('meal_date') or row.get('order_date') or today_str
+        # Calcular el día de semana CORRECTO para esta comida específica
+        try:
+            meal_d_obj = date.fromisoformat(meal_d)
+            row['meal_day'] = DAY_NAMES[meal_d_obj.weekday()]
+        except Exception:
+            row['meal_day'] = today_day
         pid = o['patient_id']
         if pid not in orders_map:
             orders_map[pid] = {}

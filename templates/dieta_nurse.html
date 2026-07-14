@@ -283,7 +283,7 @@
       {% if day_menu %}
       <div style="background:#F0F8F4;border-left:3px solid var(--green-l);border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:11px;">
         <div style="font-weight:700;color:var(--mid);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">{{ menu_label }}</div>
-        {% for mk2, ml2, _ in [('desayuno','Desayuno'),('almuerzo','Almuerzo'),('cena','Cena')] %}
+        {% for mk2, ml2 in [('desayuno','Desayuno'),('almuerzo','Almuerzo'),('cena','Cena')] %}
         <div style="color:var(--dark);padding:1px 0;"><strong>{{ ml2 }}:</strong> {{ day_menu[mk2][0] }}</div>
         {% endfor %}
       </div>

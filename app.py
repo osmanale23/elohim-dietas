@@ -160,6 +160,13 @@ MEAL_TIMES = [
 
 # ─── MENÚS POR DÍA ──────────────────────────────────────────────────────────
 DAY_NAMES = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo']
+DAY_NAMES_ES = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+MONTH_NAMES_ES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+                  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+
+def today_label_es(d=None):
+    d = d or date.today()
+    return f"{DAY_NAMES_ES[d.weekday()]}, {d.day} de {MONTH_NAMES_ES[d.month - 1]} {d.year}"
 
 MENU_NORMAL = {
     'lunes':     {
@@ -395,6 +402,7 @@ def dieta_nurse():
     role = session['dieta_role']
     today_str = date.today().strftime('%Y-%m-%d')
     today_day = DAY_NAMES[date.today().weekday()]
+    today_lbl = today_label_es()
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     cur.execute(
@@ -434,6 +442,7 @@ def dieta_nurse():
                            floor_label=FLOOR_LABEL[role],
                            today=today_str,
                            today_day=today_day,
+                           today_label=today_lbl,
                            menu_normal=MENU_NORMAL,
                            menu_diabetico=MENU_DIABETICO,
                            diet_options=DIET_OPTIONS,

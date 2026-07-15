@@ -327,11 +327,8 @@ body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
   {% set meal_keys = ['desayuno','almuerzo','cena'] %}
   {% set alert_patients = [] %}
   {% for p in patients %}
-    {% set registered_meals = [] %}
-    {% for mk in meal_keys %}
-      {% if orders_map.get((p.id, mk)) %}{% set _ = registered_meals.append(mk) %}{% endif %}
-    {% endfor %}
-    {% if registered_meals|length == 0 %}
+    {% set today_orders = orders_map.get(p.id, {}).get(today, {}) %}
+    {% if today_orders|length == 0 %}
       {% set _ = alert_patients.append(p.name) %}
     {% endif %}
   {% endfor %}
@@ -358,10 +355,11 @@ body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
         <div class="room-tag">{% if role == 'uci' %}Cama {% endif %}{{ p.room }}</div>
       </div>
 
-      <!-- COMIDAS PENDIENTES DEL DÍA -->
+      <!-- COMIDAS PENDIENTES HOY -->
+      {% set today_orders = orders_map.get(p.id, {}).get(today, {}) %}
       {% set pending = [] %}
       {% for mk in ['desayuno','almuerzo','cena'] %}
-        {% if not orders_map.get((p.id, mk)) %}
+        {% if not today_orders.get(mk) %}
           {% set _ = pending.append({'desayuno':'🌅 Desayuno','almuerzo':'☀️ Almuerzo','cena':'🌙 Cena'}[mk]) %}
         {% endif %}
       {% endfor %}

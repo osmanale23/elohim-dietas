@@ -308,30 +308,82 @@
                   {% endif %}
                 </div>
               {% elif o_diet == 'otra' %}
-                {# DIETA ESPECIAL — mostrar notas prominentemente #}
-                <div style="background:#F3E5F5;border:1.5px solid #CE93D8;border-radius:10px;padding:14px 16px;margin:8px 0;">
-                  <div style="font-weight:700;color:#6A1B9A;font-size:14px;margin-bottom:6px;">⚠️ DIETA ESPECIAL</div>
-                  {% if o_notes %}
-                  <div style="color:#4A148C;font-size:13px;line-height:1.5;">{{ o_notes }}</div>
-                  {% else %}
-                  <div style="color:#999;font-size:12px;font-style:italic;">Sin instrucciones adicionales registradas</div>
-                  {% endif %}
+                {# DIETA ESPECIAL — notas de enfermería + opciones institucionales #}
+                {% if o_notes %}
+                <div style="background:#F3E5F5;border:1.5px solid #CE93D8;border-radius:8px;padding:10px 14px;margin:8px 0;">
+                  <div style="font-weight:700;color:#6A1B9A;font-size:12px;margin-bottom:4px;">⚠️ Instrucción enfermería:</div>
+                  <div style="color:#4A148C;font-size:12px;line-height:1.4;">{{ o_notes }}</div>
                 </div>
+                {% endif %}
+                {% set otra_opts = cafeteria_options.get('otra', {}).get(meal_key, []) %}
+                {% set order_opts = order.options_list if order else [] %}
+                {% set order_notes_txt = (order.extra_notes or '') if order else '' %}
+                {% if otra_opts %}
+                <div style="margin:8px 0 4px;">
+                  <div style="font-size:10px;color:var(--mid);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">🍽️ ¿Qué se va a preparar?</div>
+                  <div class="options-grid" id="opts-{{ p.id }}-{{ meal_key }}">
+                    {% for item in otra_opts %}
+                    <div class="option-item {% if item in order_opts %}selected{% endif %}" onclick="toggleOption(this)">
+                      <input type="checkbox" value="{{ item|e }}" {% if item in order_opts %}checked{% endif %}>
+                      <span>{{ item }}</span>
+                    </div>
+                    {% endfor %}
+                  </div>
+                </div>
+                {% endif %}
+                <div style="margin:6px 0;">
+                  <input class="notes-input" type="text" id="notes-{{ p.id }}-{{ meal_key }}"
+                    placeholder="💬 Comentario o sustitución"
+                    value="{{ order_notes_txt|e }}">
+                </div>
+                <button class="confirm-btn" onclick="saveOptions({{ p.id }}, '{{ meal_key }}', '{{ today }}')">
+                  ✅ Confirmar Selección
+                </button>
               {% else %}
-              {# Menú fijo según condición y tipo de dieta #}
+              {# Opciones seleccionables combinadas: menú del día + Dra. Eridania #}
               {% if o_cond == 'diabetico' %}
-                {% set menu_item = menu_diabetico[today_day][meal_key] %}
+                {% set day_items = menu_diabetico.get(today_day, {}).get(meal_key, []) %}
+                {% set extra_items = cafeteria_options.get('diabetico', {}).get(meal_key, []) %}
               {% elif o_diet == 'corriente' %}
-                {% set menu_item = menu_normal[today_day][meal_key] %}
+                {% set day_items = menu_normal.get(today_day, {}).get(meal_key, []) %}
+                {% set extra_items = cafeteria_options.get('corriente', {}).get(meal_key, []) %}
+              {% elif o_diet == 'blanda' %}
+                {% set day_items = diet_options.get('blanda', {}).get(meal_key, []) %}
+                {% set extra_items = cafeteria_options.get('blanda', {}).get(meal_key, []) %}
               {% else %}
-                {% set menu_item = diet_options[o_diet][meal_key] %}
+                {% set day_items = diet_options.get(o_diet, {}).get(meal_key, []) %}
+                {% set extra_items = [] %}
               {% endif %}
-              <div style="background:#F5FAF7;border-left:3px solid var(--green-l);border-radius:8px;padding:10px 14px;margin:8px 0;">
-                <div style="font-size:10px;color:var(--mid);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">🍽️ Menú del día:</div>
-                {% for item in menu_item %}
-                <div style="font-size:13px;color:var(--dark);font-weight:500;">{{ item }}</div>
-                {% endfor %}
+              {% set ns2 = namespace(all_opts=[]) %}
+              {% for item in day_items %}
+                {% if item not in ns2.all_opts %}{% set ns2.all_opts = ns2.all_opts + [item] %}{% endif %}
+              {% endfor %}
+              {% for item in extra_items %}
+                {% if item not in ns2.all_opts %}{% set ns2.all_opts = ns2.all_opts + [item] %}{% endif %}
+              {% endfor %}
+              {% set order_opts = order.options_list if order else [] %}
+              {% set order_notes_txt = (order.extra_notes or '') if order else '' %}
+              {% if ns2.all_opts %}
+              <div style="margin:8px 0 4px;">
+                <div style="font-size:10px;color:var(--mid);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">🍽️ ¿Qué se va a preparar?</div>
+                <div class="options-grid" id="opts-{{ p.id }}-{{ meal_key }}">
+                  {% for item in ns2.all_opts %}
+                  <div class="option-item {% if item in order_opts %}selected{% endif %}" onclick="toggleOption(this)">
+                    <input type="checkbox" value="{{ item|e }}" {% if item in order_opts %}checked{% endif %}>
+                    <span>{{ item }}</span>
+                  </div>
+                  {% endfor %}
+                </div>
               </div>
+              {% endif %}
+              <div style="margin:6px 0;">
+                <input class="notes-input" type="text" id="notes-{{ p.id }}-{{ meal_key }}"
+                  placeholder="💬 Comentario o sustitución"
+                  value="{{ order_notes_txt|e }}">
+              </div>
+              <button class="confirm-btn" onclick="saveOptions({{ p.id }}, '{{ meal_key }}', '{{ today }}')">
+                ✅ Confirmar Selección
+              </button>
               {% endif %}{# end dieta cero/otra/normal #}
 
               {% set cur_status = order['delivery_status'] if order['delivery_status'] else 'pendiente' %}
@@ -389,14 +441,15 @@ function toggleOption(el) {
   el.classList.toggle('selected');
   el.querySelector('input').checked = el.classList.contains('selected');
 }
-async function saveOptions(pid, mealKey) {
+async function saveOptions(pid, mealKey, date) {
   const grid = document.getElementById(`opts-${pid}-${mealKey}`);
-  const selected = [...grid.querySelectorAll('input:checked')].map(i => i.value);
+  const selected = grid ? [...grid.querySelectorAll('input:checked')].map(i => i.value) : [];
+  const notes = document.getElementById(`notes-${pid}-${mealKey}`)?.value || '';
   const r = await fetch('/api/order/save', {
     method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ patient_id:pid, meal_time:mealKey, date:'{{ today }}', options:selected, notes:'' })
+    body: JSON.stringify({ patient_id:pid, meal_time:mealKey, date:date, options:selected, notes:notes })
   });
-  if ((await r.json()).ok) showToast('✅ Selección guardada');
+  if ((await r.json()).ok) showToast('✅ Selección confirmada');
 }
 async function setStatus(pid, mealKey, orderDate, status, btn) {
   const r = await fetch('/api/order/delivery-status', {

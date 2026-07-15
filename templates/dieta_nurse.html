@@ -167,12 +167,6 @@ body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
   border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; transition:background 0.2s;
 }
 .discharge-btn:hover { background:#FDEDEC; }
-.delete-btn {
-  background:#FDEDEC; color:#922B21;
-  border:1.5px solid #E74C3C; padding:8px 12px;
-  border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; transition:background 0.2s;
-}
-.delete-btn:hover { background:#F5B7B1; }
 /* TRANSFER SECTION */
 .transfer-section {
   background:white; border-radius:14px; padding:20px;
@@ -327,8 +321,11 @@ body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
   {% set meal_keys = ['desayuno','almuerzo','cena'] %}
   {% set alert_patients = [] %}
   {% for p in patients %}
-    {% set today_orders = orders_map.get(p.id, {}).get(today, {}) %}
-    {% if today_orders|length == 0 %}
+    {% set registered_meals = [] %}
+    {% for mk in meal_keys %}
+      {% if orders_map.get((p.id, mk)) %}{% set _ = registered_meals.append(mk) %}{% endif %}
+    {% endfor %}
+    {% if registered_meals|length == 0 %}
       {% set _ = alert_patients.append(p.name) %}
     {% endif %}
   {% endfor %}
@@ -355,11 +352,10 @@ body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
         <div class="room-tag">{% if role == 'uci' %}Cama {% endif %}{{ p.room }}</div>
       </div>
 
-      <!-- COMIDAS PENDIENTES HOY -->
-      {% set today_orders = orders_map.get(p.id, {}).get(today, {}) %}
+      <!-- COMIDAS PENDIENTES DEL DÍA -->
       {% set pending = [] %}
       {% for mk in ['desayuno','almuerzo','cena'] %}
-        {% if not today_orders.get(mk) %}
+        {% if not orders_map.get((p.id, mk)) %}
           {% set _ = pending.append({'desayuno':'🌅 Desayuno','almuerzo':'☀️ Almuerzo','cena':'🌙 Cena'}[mk]) %}
         {% endif %}
       {% endfor %}
@@ -395,13 +391,9 @@ body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
             <div style="font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:1px;padding:6px 0 4px 0;border-bottom:1.5px solid var(--green-l);margin-bottom:6px;">
               📅 Hoy — {{ date_labels.get(meal_date_key, meal_date_key) }}
             </div>
-            {% elif meal_date_key > today %}
+            {% else %}
             <div style="font-size:11px;font-weight:700;color:#E65100;text-transform:uppercase;letter-spacing:1px;padding:6px 0 4px 0;border-bottom:1.5px solid #FFCC80;margin-bottom:6px;margin-top:10px;">
               📅 {{ date_labels.get(meal_date_key, meal_date_key) }}
-            </div>
-            {% else %}
-            <div style="font-size:11px;font-weight:700;color:#5D6D7E;text-transform:uppercase;letter-spacing:1px;padding:6px 0 4px 0;border-bottom:1.5px solid #BDC3C7;margin-bottom:6px;margin-top:10px;opacity:0.75;">
-              🗂️ {{ date_labels.get(meal_date_key, meal_date_key) }}
             </div>
             {% endif %}
             {# Comidas de ese día #}
@@ -444,25 +436,13 @@ body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
                   <span class="recv-stamp" id="recv-{{ p.id }}-{{ meal_date_key }}-{{ mk }}">✓ Recibido por enfermería</span>
                   {% else %}
                   <button class="recv-btn" id="recv-{{ p.id }}-{{ meal_date_key }}-{{ mk }}"
-                    onclick="marcarRecibido({{ p.id }}, '{{ mk }}', '{{ meal_date_key }}', this)">
+                    onclick="marcarRecibido({{ p.id }}, '{{ mk }}', this)">
                     Marcar como Recibido
                   </button>
                   {% endif %}
-                  <button
-                    data-order-id="{{ ord['id'] }}"
-                    data-diet="{{ od }}"
-                    data-condition="{{ ord.get('condition','normal') }}"
-                    data-dieta-cero="{{ ord.get('dieta_cero',0) }}"
-                    data-notes="{{ (ord.get('meal_notes') or '')|e }}"
-                    data-meal-date="{{ ord.get('meal_date') or ord.get('order_date') or today }}"
-                    onclick="openEditMealFromBtn(this)"
+                  <button onclick="openEditMeal({{ ord['id'] }}, '{{ od }}', '{{ ord.get('condition','normal') }}', {{ ord.get('dieta_cero',0) }}, {{ (ord.get('meal_notes') or '')|tojson }})"
                     style="background:#F3E5F5;color:#6A1B9A;border:1px solid #CE93D8;border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;">
                     ✏️ Editar
-                  </button>
-                  <button
-                    onclick="deleteMeal({{ ord['id'] }}, '{{ meal_names[mk] }}')"
-                    style="background:#FDEDEC;color:#922B21;border:1.5px solid #E74C3C;border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;">
-                    🗑️ Borrar
                   </button>
                 </div>
                 <!-- Menú esperado -->
@@ -477,12 +457,12 @@ body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
                 {% elif not ord.get('dieta_cero') and od not in ('cero','otra') %}
                   {% set od_diet = od or 'corriente' %}
                   {% set od_cond = p.condition if p.condition and p.condition != 'normal' else (ord.get('condition') or 'normal') %}
-                  {# Usar el día de semana REAL de esta comida, calculado en el backend #}
-                  {% set ord_day = ord.get('meal_day') or today_day %}
+                  {# Menú esperado según el día de semana de la comida, no necesariamente hoy #}
+                  {% set mk_day_names = ['lunes','martes','miercoles','jueves','viernes','sabado','domingo'] %}
                   {% if od_cond == 'diabetico' %}
-                    {% set expected = menu_diabetico.get(ord_day, {}).get(mk, []) %}
+                    {% set expected = menu_diabetico.get(today_day, {}).get(mk, []) %}
                   {% elif od_diet == 'corriente' %}
-                    {% set expected = menu_normal.get(ord_day, {}).get(mk, []) %}
+                    {% set expected = menu_normal.get(today_day, {}).get(mk, []) %}
                   {% else %}
                     {% set expected = diet_options.get(od_diet, {}).get(mk, []) %}
                   {% endif %}
@@ -619,10 +599,6 @@ body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
     </div>
     <div id="editMealDetailsSection">
       <div class="form-group">
-        <label>📅 Fecha de la Comida</label>
-        <input type="date" id="editMealDate" style="width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;color:var(--dark);">
-      </div>
-      <div class="form-group">
         <label>Tipo de Dieta</label>
         <select id="editMealDiet">
           <option value="corriente">Dieta Corriente</option>
@@ -690,17 +666,13 @@ body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
         </select>
       </div>
       <div class="form-group">
-        <label>Tiempo de Comida</label>
+        <label>Tiempo de Comida Actual</label>
         <select id="addMealTime">
           <option value="desayuno">🌅 Desayuno — 7:30 AM</option>
           <option value="almuerzo">☀️ Almuerzo — 12:30 PM</option>
           <option value="cena">🌙 Cena — 6:30 PM</option>
         </select>
       </div>
-    </div>
-    <div class="form-group">
-      <label>📅 Fecha de la Comida</label>
-      <input type="date" id="addMealDate" style="width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;color:var(--dark);">
     </div>
 
     <!-- Dieta Cero para primer registro -->
@@ -883,7 +855,7 @@ async function saveAddMeal() {
 function openAdd() {
   const nurse = document.getElementById('nurseSelect').value;
   if (!nurse) { showToast('⚠️ Selecciona tu nombre primero'); return; }
-  document.getElementById('addMealDate').value = new Date().toISOString().slice(0,10);
+  document.getElementById('addMealDate') && (document.getElementById('addMealDate').value = new Date().toISOString().slice(0,10));
   document.getElementById('addModal').classList.add('active');
 }
 function closeAdd() { document.getElementById('addModal').classList.remove('active'); }
@@ -899,7 +871,7 @@ async function saveAdd() {
       edad: document.getElementById('addEdad').value || null,
       sexo: document.getElementById('addSexo').value,
       meal_time: document.getElementById('addMealTime').value,
-      meal_date: document.getElementById('addMealDate').value || new Date().toISOString().slice(0,10),
+      meal_date: new Date().toISOString().slice(0,10),
       diet_type: dieta_cero ? 'cero' : document.getElementById('addDiet').value,
       condition: document.getElementById('addCondition').value,
       meal_notes: document.getElementById('addNotes').value,
@@ -910,28 +882,15 @@ async function saveAdd() {
   if ((await r.json()).ok) { showToast('Paciente registrado ✓'); setTimeout(()=>location.reload(), 1000); }
 }
 
-// ── EDITAR PEDIDO — wrapper desde data-attributes ────────────
-function openEditMealFromBtn(btn) {
-  openEditMeal(
-    btn.dataset.orderId,
-    btn.dataset.diet,
-    btn.dataset.condition,
-    parseInt(btn.dataset.dietaCero),
-    btn.dataset.notes,
-    btn.dataset.mealDate
-  );
-}
-
 // ── EDITAR PEDIDO DE COMIDA ───────────────────────────────────
 let _editOrderId = null;
-function openEditMeal(orderId, diet, condition, dietaCero, notes, mealDate) {
+function openEditMeal(orderId, diet, condition, dietaCero, notes) {
   _editOrderId = orderId;
   document.getElementById('editDietaCeroCheck').checked = !!dietaCero;
   toggleEditDietaCero();
   document.getElementById('editMealDiet').value = diet || 'corriente';
   document.getElementById('editMealCondition').value = condition || 'normal';
   document.getElementById('editMealNotes').value = notes || '';
-  document.getElementById('editMealDate').value = mealDate || new Date().toISOString().slice(0,10);
   document.getElementById('editMealModal').classList.add('active');
 }
 function closeEditMeal() {
@@ -954,7 +913,6 @@ async function saveEditMeal() {
       condition: document.getElementById('editMealCondition').value,
       meal_notes: document.getElementById('editMealNotes').value,
       dieta_cero: dieta_cero,
-      meal_date: document.getElementById('editMealDate').value,
     })
   });
   const res = await r.json();
@@ -968,10 +926,10 @@ async function saveEditMeal() {
 }
 
 // ── MARCAR RECIBIDO ───────────────────────────────────────────
-async function marcarRecibido(pid, mealKey, mealDate, btn) {
+async function marcarRecibido(pid, mealKey, btn) {
   const r = await fetch('/api/order/nurse-received', {
     method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ patient_id: pid, meal_time: mealKey, meal_date: mealDate })
+    body: JSON.stringify({ patient_id: pid, meal_time: mealKey })
   });
   if ((await r.json()).ok) {
     const stamp = document.createElement('span');
@@ -990,15 +948,11 @@ async function refreshStatus() {
   try {
     const data = await fetch('/api/floor/status').then(r=>r.json());
     for (const [key, status] of Object.entries(data)) {
-      // key = "pid_date_meal" e.g. "5_2026-07-15_desayuno"
-      const parts = key.split('_');
-      const pid = parts[0];
-      const meal = parts[parts.length - 1];
-      const dateStr = parts.slice(1, -1).join('_');
-      const el = document.getElementById(`ds-${pid}-${dateStr}-${meal}`);
+      const [pid, meal] = key.split('_');
+      const el = document.getElementById(`ds-${pid}-${meal}`);
       if (el) {
         el.className = `ds-badge ds-${status}`;
-        el.textContent = DS_LABELS[status] || status;
+        el.textContent = `${DS_LABELS[status]}`;
       }
     }
   } catch(e) {}
@@ -1013,19 +967,6 @@ async function discharge(id, name) {
     showToast(`${name} dado de alta`);
     document.getElementById(`card-${id}`).style.opacity = '0.3';
     setTimeout(()=>location.reload(), 1200);
-  }
-}
-
-// ── ELIMINAR PEDIDO DE COMIDA ─────────────────────────────────
-async function deleteMeal(orderId, mealLabel) {
-  if (!confirm(`⚠️ ¿Eliminar el pedido de ${mealLabel}?\n\nSolo se borra este registro. El paciente y sus demás comidas quedan intactos.`)) return;
-  const r = await fetch(`/api/meal/${orderId}/delete`, {method:'DELETE'});
-  const res = await r.json();
-  if (res.ok) {
-    showToast(`🗑️ Pedido de ${mealLabel} eliminado`);
-    setTimeout(() => location.reload(), 900);
-  } else {
-    showToast('❌ Error al eliminar: ' + (res.error || 'desconocido'));
   }
 }
 </script>

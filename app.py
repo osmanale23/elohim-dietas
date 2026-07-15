@@ -244,6 +244,98 @@ MENU_DIABETICO = {
     },
 }
 
+# Opciones Dra. Eridania — se combinan con los menús diarios en el panel de cafetería
+CAFETERIA_OPTIONS = {
+    'corriente': {
+        'desayuno': [
+            'Avena cocida en leche descremada (250ml)',
+            '2 huevos hervidos o revueltos',
+            '2 rebanadas de pan integral',
+            'Fruta blanda (lechosa/sandía/melón/guineo)',
+            'Té o café',
+        ],
+        'almuerzo': [
+            'Sopa de vegetales con pollo',
+            'Pechuga de pollo a la plancha (120-150g)',
+            'Arroz blanco o integral / Trigo (1 taza)',
+            'Vegetales cocidos',
+            'Ensalada fresca',
+            'Jugo natural sin azúcar',
+        ],
+        'cena': [
+            'Pescado al horno (120g)',
+            'Pollo desmenuzado (120g)',
+            'Puré de papa / Yautía / Batata / Plátano maduro',
+            'Vegetales cocidos',
+            'Huevo hervido',
+            'Queso mozzarella o Gouda',
+        ],
+    },
+    'blanda': {
+        'desayuno': [
+            'Avena en leche descremada',
+            '2 huevos hervidos o revueltos',
+            'Fruta blanda',
+            'Té o café',
+            'Yogurt Griego',
+        ],
+        'almuerzo': [
+            'Vegetales cocidos',
+            'Ensalada fresca',
+            'Puré de papa / Yautía / Auyama / Plátano maduro',
+            'Pollo desmenuzado (150-200g)',
+            'Sopas licuadas',
+        ],
+        'cena': [
+            'Pollo desmenuzado',
+            'Pescado al horno',
+            'Puré de papa / Plátano maduro / Yautía',
+            'Vegetales cocidos',
+            'Sopa de vegetales',
+            'Huevo hervido',
+            'Queso',
+        ],
+    },
+    'diabetico': {
+        'desayuno': [
+            'Avena cocida sin azúcar',
+            '2 huevos hervidos o revueltos',
+            'Pan integral',
+            'Fruta bajo índice glucémico (melón/fresa/manzana)',
+            'Té o café sin azúcar',
+        ],
+        'almuerzo': [
+            'Sopa de vegetales con pollo (sin papa)',
+            'Pechuga de pollo a la plancha (120-150g)',
+            'Arroz integral / Trigo (½ taza)',
+            'Vegetales cocidos',
+            'Ensalada fresca',
+            'Agua o jugo sin azúcar',
+        ],
+        'cena': [
+            'Pescado al horno (120g)',
+            'Pollo desmenuzado (120g)',
+            'Yautía / Batata / Plátano maduro (pequeña porción)',
+            'Vegetales cocidos',
+            'Huevo hervido',
+            'Queso mozzarella bajo en grasa',
+        ],
+    },
+    'otra': {
+        'desayuno': [
+            'Huevo', 'Queso', 'Leche', 'Pan integral',
+            'Yogur Griego', 'Porción de fruta', 'Avena', 'Maicena', 'Harina del negrito',
+        ],
+        'almuerzo': [
+            'Pollo', 'Pescado', 'Carne', 'Arroz', 'Trigo', 'Víveres', 'Vegetales',
+        ],
+        'cena': [
+            'Pollo', 'Pescado', 'Carne', 'Puré de papa', 'Plátano maduro',
+            'Yautía', 'Vegetales', 'Sopa de vegetales', 'Huevo hervido', 'Queso',
+        ],
+    },
+}
+
 
 # ─── TEMPLATE FILTERS ───────────────────────────────────────────────────────
 @app.template_filter('fmt_time')
@@ -675,7 +767,14 @@ def dieta_cafeteria():
     orders = cur.fetchall()
     cur.close()
     conn.close()
-    orders_map = {(o['patient_id'], o['meal_time']): dict(o) for o in orders}
+    orders_map = {}
+    for o in orders:
+        row = dict(o)
+        try:
+            row['options_list'] = json.loads(row.get('options_selected') or '[]')
+        except Exception:
+            row['options_list'] = []
+        orders_map[(o['patient_id'], o['meal_time'])] = row
     return render_template('dieta_cafeteria.html',
                            patients=patients,
                            orders_map=orders_map,
@@ -685,6 +784,7 @@ def dieta_cafeteria():
                            menu_diabetico=MENU_DIABETICO,
                            meal_times=MEAL_TIMES,
                            diet_options=DIET_OPTIONS,
+                           cafeteria_options=CAFETERIA_OPTIONS,
                            condition_notes=CONDITION_NOTES,
                            condition_label=CONDITION_LABEL,
                            floor_label=FLOOR_LABEL)

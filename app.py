@@ -430,6 +430,8 @@ def init_db():
         "ALTER TABLE meal_orders ADD COLUMN IF NOT EXISTS dieta_cero INTEGER DEFAULT 0",
         "ALTER TABLE meal_orders ADD COLUMN IF NOT EXISTS updated_at TEXT",
         "ALTER TABLE meal_orders ADD COLUMN IF NOT EXISTS updated_by TEXT",
+        "ALTER TABLE meal_orders ADD COLUMN IF NOT EXISTS deleted_at TEXT DEFAULT NULL",
+        "ALTER TABLE meal_orders ADD COLUMN IF NOT EXISTS deleted_by TEXT DEFAULT NULL",
     ]:
         cur.execute(stmt)
     conn.commit()
@@ -504,7 +506,7 @@ def dieta_nurse():
     cur.execute(
         '''SELECT mo.* FROM meal_orders mo
            JOIN patients p ON mo.patient_id = p.id
-           WHERE p.floor=%s AND p.active=1
+           WHERE p.floor=%s AND p.active=1 AND mo.deleted_at IS NULL
            ORDER BY COALESCE(mo.meal_date, mo.order_date), mo.meal_time''',
         (role,)
     )
@@ -583,7 +585,7 @@ def floor_status():
                   COALESCE(mo.meal_date, mo.order_date) as meal_d
            FROM meal_orders mo
            JOIN patients p ON mo.patient_id = p.id
-           WHERE p.floor=%s AND p.active=1''',
+           WHERE p.floor=%s AND p.active=1 AND mo.deleted_at IS NULL''',
         (role,)
     )
     orders = cur.fetchall()
@@ -655,7 +657,7 @@ def add_meal(pid):
     cur = conn.cursor(cursor_factory=RealDictCursor)
     # Solo crear si no existe ya para este paciente/fecha/tiempo
     cur.execute(
-        'SELECT id FROM meal_orders WHERE patient_id=%s AND COALESCE(meal_date, order_date)=%s AND meal_time=%s',
+        'SELECT id FROM meal_orders WHERE patient_id=%s AND COALESCE(meal_date, order_date)=%s AND meal_time=%s AND deleted_at IS NULL',
         (pid, meal_date, meal_time)
     )
     if not cur.fetchone():
@@ -692,9 +694,14 @@ def discharge_patient(pid):
 def delete_meal_order(order_id):
     redir = nurse_required()
     if redir: return jsonify({'error': 'unauthorized'}), 403
+    nurse = session.get('nurse_name', session.get('dieta_role', ''))
+    now_str = datetime.now().isoformat(timespec='seconds')
     conn = get_db()
     cur = conn.cursor()
-    cur.execute('DELETE FROM meal_orders WHERE id=%s', (order_id,))
+    cur.execute(
+        'UPDATE meal_orders SET deleted_at=%s, deleted_by=%s WHERE id=%s AND deleted_at IS NULL',
+        (now_str, nurse, order_id)
+    )
     conn.commit()
     cur.close()
     conn.close()
@@ -763,7 +770,7 @@ def dieta_cafeteria():
     cur = conn.cursor(cursor_factory=RealDictCursor)
     cur.execute('SELECT * FROM patients WHERE active=1 ORDER BY floor, room')
     patients = cur.fetchall()
-    cur.execute("SELECT * FROM meal_orders WHERE COALESCE(meal_date, order_date)=%s", (today,))
+    cur.execute("SELECT * FROM meal_orders WHERE COALESCE(meal_date, order_date)=%s AND deleted_at IS NULL", (today,))
     orders = cur.fetchall()
     cur.close()
     conn.close()
@@ -800,7 +807,7 @@ def nurse_received():
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     cur.execute(
-        'SELECT id FROM meal_orders WHERE patient_id=%s AND COALESCE(meal_date, order_date)=%s AND meal_time=%s',
+        'SELECT id FROM meal_orders WHERE patient_id=%s AND COALESCE(meal_date, order_date)=%s AND meal_time=%s AND deleted_at IS NULL',
         (d['patient_id'], meal_date, d['meal_time'])
     )
     existing = cur.fetchone()
@@ -824,7 +831,7 @@ def update_delivery_status():
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     cur.execute(
-        'SELECT id FROM meal_orders WHERE patient_id=%s AND COALESCE(meal_date, order_date)=%s AND meal_time=%s',
+        'SELECT id FROM meal_orders WHERE patient_id=%s AND COALESCE(meal_date, order_date)=%s AND meal_time=%s AND deleted_at IS NULL',
         (d['patient_id'], d['date'], d['meal_time'])
     )
     existing = cur.fetchone()
@@ -906,7 +913,7 @@ def dieta_gerencia():
     else:
         cur.execute('SELECT * FROM patients WHERE active=1 AND floor=%s ORDER BY room', (floor_filter,))
     patients = cur.fetchall()
-    cur.execute("SELECT * FROM meal_orders WHERE COALESCE(meal_date, order_date)=%s", (today,))
+    cur.execute("SELECT * FROM meal_orders WHERE COALESCE(meal_date, order_date)=%s AND deleted_at IS NULL", (today,))
     orders = cur.fetchall()
     # Pacientes activos por piso
     floor_counts = {}
@@ -917,23 +924,23 @@ def dieta_gerencia():
     status_counts = {}
     for st in ('recibido', 'en_proceso', 'en_camino', 'entregado'):
         cur.execute(
-            "SELECT COUNT(*) as cnt FROM meal_orders WHERE COALESCE(meal_date, order_date)=%s AND delivery_status=%s", (today, st)
+            "SELECT COUNT(*) as cnt FROM meal_orders WHERE COALESCE(meal_date, order_date)=%s AND delivery_status=%s AND deleted_at IS NULL", (today, st)
         )
         status_counts[st] = cur.fetchone()['cnt']
     cur.execute(
-        "SELECT COUNT(*) as cnt FROM meal_orders WHERE COALESCE(meal_date, order_date)=%s AND nurse_received=1", (today,)
+        "SELECT COUNT(*) as cnt FROM meal_orders WHERE COALESCE(meal_date, order_date)=%s AND nurse_received=1 AND deleted_at IS NULL", (today,)
     )
     status_counts['nurse_received'] = cur.fetchone()['cnt']
     cur.execute(
-        "SELECT COUNT(*) as cnt FROM meal_orders WHERE COALESCE(meal_date, order_date)=%s AND dieta_cero=1", (today,)
+        "SELECT COUNT(*) as cnt FROM meal_orders WHERE COALESCE(meal_date, order_date)=%s AND dieta_cero=1 AND deleted_at IS NULL", (today,)
     )
     status_counts['dieta_cero'] = cur.fetchone()['cnt']
     cur.execute(
-        "SELECT COUNT(*) as cnt FROM meal_orders WHERE COALESCE(meal_date, order_date)=%s AND diet_type='otra'", (today,)
+        "SELECT COUNT(*) as cnt FROM meal_orders WHERE COALESCE(meal_date, order_date)=%s AND diet_type='otra' AND deleted_at IS NULL", (today,)
     )
     status_counts['dieta_otra'] = cur.fetchone()['cnt']
     cur.execute(
-        "SELECT COUNT(*) as cnt FROM meal_orders WHERE COALESCE(meal_date, order_date)=%s", (today,)
+        "SELECT COUNT(*) as cnt FROM meal_orders WHERE COALESCE(meal_date, order_date)=%s AND deleted_at IS NULL", (today,)
     )
     status_counts['total_orders'] = cur.fetchone()['cnt']
     cur.close()
@@ -987,7 +994,7 @@ def gerencia_reporte():
                   p.condition, p.edad, p.sexo, p.registered_by
            FROM meal_orders mo
            JOIN patients p ON mo.patient_id = p.id
-           WHERE mo.order_date BETWEEN %s AND %s
+           WHERE mo.order_date BETWEEN %s AND %s AND mo.deleted_at IS NULL
            ORDER BY mo.order_date, p.floor, mo.meal_time''',
         (inicio, fin)
     )

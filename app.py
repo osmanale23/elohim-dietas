@@ -413,9 +413,8 @@ def dieta_nurse():
         '''SELECT mo.* FROM meal_orders mo
            JOIN patients p ON mo.patient_id = p.id
            WHERE p.floor=%s AND p.active=1
-             AND COALESCE(mo.meal_date, mo.order_date) >= %s
            ORDER BY COALESCE(mo.meal_date, mo.order_date), mo.meal_time''',
-        (role, today_str)
+        (role,)
     )
     orders = cur.fetchall()
     # Pacientes transferibles (solo para piso5 y piso6)

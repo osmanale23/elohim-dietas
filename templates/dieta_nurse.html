@@ -456,6 +456,7 @@ body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
                     data-condition="{{ ord.get('condition','normal') }}"
                     data-dieta-cero="{{ ord.get('dieta_cero',0) }}"
                     data-notes="{{ (ord.get('meal_notes') or '')|e }}"
+                    data-meal-date="{{ ord.get('meal_date') or ord.get('order_date') or today }}"
                     onclick="openEditMealFromBtn(this)"
                     style="background:#F3E5F5;color:#6A1B9A;border:1px solid #CE93D8;border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;">
                     ✏️ Editar
@@ -619,6 +620,10 @@ body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
       <label for="editDietaCeroCheck">⛔ DIETA CERO — No preparar alimentos</label>
     </div>
     <div id="editMealDetailsSection">
+      <div class="form-group">
+        <label>📅 Fecha de la Comida</label>
+        <input type="date" id="editMealDate" style="width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;color:var(--dark);">
+      </div>
       <div class="form-group">
         <label>Tipo de Dieta</label>
         <select id="editMealDiet">
@@ -914,19 +919,21 @@ function openEditMealFromBtn(btn) {
     btn.dataset.diet,
     btn.dataset.condition,
     parseInt(btn.dataset.dietaCero),
-    btn.dataset.notes
+    btn.dataset.notes,
+    btn.dataset.mealDate
   );
 }
 
 // ── EDITAR PEDIDO DE COMIDA ───────────────────────────────────
 let _editOrderId = null;
-function openEditMeal(orderId, diet, condition, dietaCero, notes) {
+function openEditMeal(orderId, diet, condition, dietaCero, notes, mealDate) {
   _editOrderId = orderId;
   document.getElementById('editDietaCeroCheck').checked = !!dietaCero;
   toggleEditDietaCero();
   document.getElementById('editMealDiet').value = diet || 'corriente';
   document.getElementById('editMealCondition').value = condition || 'normal';
   document.getElementById('editMealNotes').value = notes || '';
+  document.getElementById('editMealDate').value = mealDate || new Date().toISOString().slice(0,10);
   document.getElementById('editMealModal').classList.add('active');
 }
 function closeEditMeal() {
@@ -949,6 +956,7 @@ async function saveEditMeal() {
       condition: document.getElementById('editMealCondition').value,
       meal_notes: document.getElementById('editMealNotes').value,
       dieta_cero: dieta_cero,
+      meal_date: document.getElementById('editMealDate').value,
     })
   });
   const res = await r.json();

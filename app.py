@@ -748,13 +748,14 @@ def edit_meal_order(order_id):
     diet_type = 'cero' if dieta_cero else d.get('diet_type', 'corriente')
     conn = get_db()
     cur = conn.cursor()
+    meal_date = d.get('meal_date') or None
     cur.execute(
         '''UPDATE meal_orders
            SET diet_type=%s, condition=%s, meal_notes=%s, dieta_cero=%s,
-               updated_at=%s, updated_by=%s
+               meal_date=%s, updated_at=%s, updated_by=%s
            WHERE id=%s''',
         (diet_type, d.get('condition', 'normal'), d.get('meal_notes', ''),
-         1 if dieta_cero else 0, now_str, nurse, order_id)
+         1 if dieta_cero else 0, meal_date, now_str, nurse, order_id)
     )
     conn.commit()
     cur.close()

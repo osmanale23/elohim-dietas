@@ -444,7 +444,7 @@ body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
                   <span class="recv-stamp" id="recv-{{ p.id }}-{{ meal_date_key }}-{{ mk }}">✓ Recibido por enfermería</span>
                   {% else %}
                   <button class="recv-btn" id="recv-{{ p.id }}-{{ meal_date_key }}-{{ mk }}"
-                    onclick="marcarRecibido({{ p.id }}, '{{ mk }}', this)">
+                    onclick="marcarRecibido({{ p.id }}, '{{ mk }}', '{{ meal_date_key }}', this)">
                     Marcar como Recibido
                   </button>
                   {% endif %}
@@ -968,10 +968,10 @@ async function saveEditMeal() {
 }
 
 // ── MARCAR RECIBIDO ───────────────────────────────────────────
-async function marcarRecibido(pid, mealKey, btn) {
+async function marcarRecibido(pid, mealKey, mealDate, btn) {
   const r = await fetch('/api/order/nurse-received', {
     method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ patient_id: pid, meal_time: mealKey })
+    body: JSON.stringify({ patient_id: pid, meal_time: mealKey, meal_date: mealDate })
   });
   if ((await r.json()).ok) {
     const stamp = document.createElement('span');
@@ -990,11 +990,15 @@ async function refreshStatus() {
   try {
     const data = await fetch('/api/floor/status').then(r=>r.json());
     for (const [key, status] of Object.entries(data)) {
-      const [pid, meal] = key.split('_');
-      const el = document.getElementById(`ds-${pid}-${meal}`);
+      // key = "pid_date_meal" e.g. "5_2026-07-15_desayuno"
+      const parts = key.split('_');
+      const pid = parts[0];
+      const meal = parts[parts.length - 1];
+      const dateStr = parts.slice(1, -1).join('_');
+      const el = document.getElementById(`ds-${pid}-${dateStr}-${meal}`);
       if (el) {
         el.className = `ds-badge ds-${status}`;
-        el.textContent = `${DS_LABELS[status]}`;
+        el.textContent = DS_LABELS[status] || status;
       }
     }
   } catch(e) {}

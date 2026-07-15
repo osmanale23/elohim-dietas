@@ -487,16 +487,17 @@ def floor_status():
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     cur.execute(
-        '''SELECT mo.patient_id, mo.meal_time, mo.delivery_status
+        '''SELECT mo.patient_id, mo.meal_time, mo.delivery_status,
+                  COALESCE(mo.meal_date, mo.order_date) as meal_d
            FROM meal_orders mo
            JOIN patients p ON mo.patient_id = p.id
-           WHERE p.floor=%s AND p.active=1 AND mo.order_date=%s''',
-        (role, today_str)
+           WHERE p.floor=%s AND p.active=1''',
+        (role,)
     )
     orders = cur.fetchall()
     cur.close()
     conn.close()
-    result = {f"{o['patient_id']}_{o['meal_time']}": (o['delivery_status'] or 'pendiente') for o in orders}
+    result = {f"{o['patient_id']}_{o['meal_d']}_{o['meal_time']}": (o['delivery_status'] or 'pendiente') for o in orders}
     return jsonify(result)
 
 
@@ -695,11 +696,12 @@ def nurse_received():
     if redir: return jsonify({'error': 'unauthorized'}), 403
     d = request.json
     today_str = date.today().strftime('%Y-%m-%d')
+    meal_date = d.get('meal_date') or today_str
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     cur.execute(
         'SELECT id FROM meal_orders WHERE patient_id=%s AND COALESCE(meal_date, order_date)=%s AND meal_time=%s',
-        (d['patient_id'], today_str, d['meal_time'])
+        (d['patient_id'], meal_date, d['meal_time'])
     )
     existing = cur.fetchone()
     if existing:

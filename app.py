@@ -560,10 +560,10 @@ def add_meal(pid):
     meal_date = d.get('meal_date', today_str)
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
-    # Solo crear si no existe ya para este tiempo
+    # Solo crear si no existe ya para este paciente/fecha/tiempo
     cur.execute(
-        'SELECT id FROM meal_orders WHERE patient_id=%s AND order_date=%s AND meal_time=%s',
-        (pid, today_str, meal_time)
+        'SELECT id FROM meal_orders WHERE patient_id=%s AND COALESCE(meal_date, order_date)=%s AND meal_time=%s',
+        (pid, meal_date, meal_time)
     )
     if not cur.fetchone():
         cur.execute(
@@ -698,7 +698,7 @@ def nurse_received():
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     cur.execute(
-        'SELECT id FROM meal_orders WHERE patient_id=%s AND order_date=%s AND meal_time=%s',
+        'SELECT id FROM meal_orders WHERE patient_id=%s AND COALESCE(meal_date, order_date)=%s AND meal_time=%s',
         (d['patient_id'], today_str, d['meal_time'])
     )
     existing = cur.fetchone()
@@ -722,7 +722,7 @@ def update_delivery_status():
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     cur.execute(
-        'SELECT id FROM meal_orders WHERE patient_id=%s AND order_date=%s AND meal_time=%s',
+        'SELECT id FROM meal_orders WHERE patient_id=%s AND COALESCE(meal_date, order_date)=%s AND meal_time=%s',
         (d['patient_id'], d['date'], d['meal_time'])
     )
     existing = cur.fetchone()

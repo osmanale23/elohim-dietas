@@ -596,14 +596,13 @@ def discharge_patient(pid):
     return jsonify({'ok': True})
 
 
-@app.route('/api/patient/<int:pid>/delete', methods=['DELETE'])
-def delete_patient(pid):
+@app.route('/api/meal/<int:order_id>/delete', methods=['DELETE'])
+def delete_meal_order(order_id):
     redir = nurse_required()
     if redir: return jsonify({'error': 'unauthorized'}), 403
     conn = get_db()
     cur = conn.cursor()
-    cur.execute('DELETE FROM meal_orders WHERE patient_id=%s', (pid,))
-    cur.execute('DELETE FROM patients WHERE id=%s', (pid,))
+    cur.execute('DELETE FROM meal_orders WHERE id=%s', (order_id,))
     conn.commit()
     cur.close()
     conn.close()

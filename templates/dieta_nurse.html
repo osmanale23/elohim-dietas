@@ -456,6 +456,11 @@ body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
                     style="background:#F3E5F5;color:#6A1B9A;border:1px solid #CE93D8;border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;">
                     ✏️ Editar
                   </button>
+                  <button
+                    onclick="deleteMeal({{ ord['id'] }}, '{{ meal_names[mk] }}')"
+                    style="background:#FDEDEC;color:#922B21;border:1.5px solid #E74C3C;border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;">
+                    🗑️ Borrar
+                  </button>
                 </div>
                 <!-- Menú esperado -->
                 {% set food_list = ord.get('options_list') or [] %}
@@ -497,7 +502,6 @@ body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
       <div class="card-actions">
         <button class="edit-btn" onclick="openAddMeal({{ p.id }}, '{{ p.name }}', '{{ p.diet_type }}', '{{ p.condition }}')">📋 Agregar Comida</button>
         <button class="discharge-btn" onclick="discharge({{ p.id }}, '{{ p.name }}')">🏥 Alta</button>
-        <button class="delete-btn" onclick="deletePatient({{ p.id }}, '{{ p.name|e }}')">🗑️</button>
       </div>
     </div>
     {% endfor %}
@@ -998,15 +1002,14 @@ async function discharge(id, name) {
   }
 }
 
-// ── ELIMINAR PACIENTE ─────────────────────────────────────────
-async function deletePatient(id, name) {
-  if (!confirm(`⚠️ ¿ELIMINAR el perfil de ${name}?\n\nEsto borrará el paciente y TODAS sus comidas permanentemente. Esta acción no se puede deshacer.`)) return;
-  const r = await fetch(`/api/patient/${id}/delete`, {method:'DELETE'});
+// ── ELIMINAR PEDIDO DE COMIDA ─────────────────────────────────
+async function deleteMeal(orderId, mealLabel) {
+  if (!confirm(`⚠️ ¿Eliminar el pedido de ${mealLabel}?\n\nSolo se borra este registro. El paciente y sus demás comidas quedan intactos.`)) return;
+  const r = await fetch(`/api/meal/${orderId}/delete`, {method:'DELETE'});
   const res = await r.json();
   if (res.ok) {
-    showToast(`🗑️ Perfil de ${name} eliminado`);
-    const card = document.getElementById(`card-${id}`);
-    if (card) card.remove();
+    showToast(`🗑️ Pedido de ${mealLabel} eliminado`);
+    setTimeout(() => location.reload(), 900);
   } else {
     showToast('❌ Error al eliminar: ' + (res.error || 'desconocido'));
   }

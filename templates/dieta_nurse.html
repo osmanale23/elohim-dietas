@@ -397,9 +397,13 @@ body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
             <div style="font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:1px;padding:6px 0 4px 0;border-bottom:1.5px solid var(--green-l);margin-bottom:6px;">
               📅 Hoy — {{ date_labels.get(meal_date_key, meal_date_key) }}
             </div>
-            {% else %}
+            {% elif meal_date_key > today %}
             <div style="font-size:11px;font-weight:700;color:#E65100;text-transform:uppercase;letter-spacing:1px;padding:6px 0 4px 0;border-bottom:1.5px solid #FFCC80;margin-bottom:6px;margin-top:10px;">
               📅 {{ date_labels.get(meal_date_key, meal_date_key) }}
+            </div>
+            {% else %}
+            <div style="font-size:11px;font-weight:700;color:#5D6D7E;text-transform:uppercase;letter-spacing:1px;padding:6px 0 4px 0;border-bottom:1.5px solid #BDC3C7;margin-bottom:6px;margin-top:10px;opacity:0.75;">
+              🗂️ {{ date_labels.get(meal_date_key, meal_date_key) }}
             </div>
             {% endif %}
             {# Comidas de ese día #}

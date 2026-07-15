@@ -449,11 +449,21 @@ async function saveOptions(pid, mealKey, date) {
   const grid = document.getElementById(`opts-${pid}-${mealKey}`);
   const selected = grid ? [...grid.querySelectorAll('input:checked')].map(i => i.value) : [];
   const notes = document.getElementById(`notes-${pid}-${mealKey}`)?.value || '';
+  if (selected.length === 0 && !notes.trim()) {
+    showToast('⚠️ Selecciona al menos una opción o escribe un comentario');
+    return;
+  }
   const r = await fetch('/api/order/save', {
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({ patient_id:pid, meal_time:mealKey, date:date, options:selected, notes:notes })
   });
-  if ((await r.json()).ok) showToast('✅ Selección confirmada');
+  const res = await r.json();
+  if (res.ok) {
+    showToast('✅ Selección confirmada');
+    setTimeout(() => location.reload(), 900);
+  } else {
+    showToast('❌ No se encontró el pedido para este paciente');
+  }
 }
 async function setStatus(pid, mealKey, orderDate, status, btn) {
   const r = await fetch('/api/order/delivery-status', {

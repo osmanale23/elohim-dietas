@@ -878,13 +878,15 @@ def save_order():
         (d['patient_id'], d['date'], d['meal_time'])
     )
     existing = cur.fetchone()
-    if existing:
-        # Solo actualizar — nunca crear pedidos automáticos desde cafetería
-        cur.execute(
-            'UPDATE meal_orders SET options_selected=%s, confirmed=1, confirmed_by=%s, confirmed_at=%s, extra_notes=%s WHERE id=%s',
-            (json.dumps(d['options']), 'cafeteria', now, d.get('notes', ''), existing['id'])
-        )
-        conn.commit()
+    if not existing:
+        cur.close()
+        conn.close()
+        return jsonify({'ok': False, 'error': 'pedido no encontrado'})
+    cur.execute(
+        'UPDATE meal_orders SET options_selected=%s, confirmed=1, confirmed_by=%s, confirmed_at=%s, extra_notes=%s WHERE id=%s',
+        (json.dumps(d['options']), 'cafeteria', now, d.get('notes', ''), existing['id'])
+    )
+    conn.commit()
     cur.close()
     conn.close()
     return jsonify({'ok': True})

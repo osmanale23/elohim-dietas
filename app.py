@@ -596,6 +596,20 @@ def discharge_patient(pid):
     return jsonify({'ok': True})
 
 
+@app.route('/api/patient/<int:pid>/delete', methods=['DELETE'])
+def delete_patient(pid):
+    redir = nurse_required()
+    if redir: return jsonify({'error': 'unauthorized'}), 403
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('DELETE FROM meal_orders WHERE patient_id=%s', (pid,))
+    cur.execute('DELETE FROM patients WHERE id=%s', (pid,))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return jsonify({'ok': True})
+
+
 @app.route('/api/transferable-patients')
 def transferable_patients():
     """Pacientes en emergencia/UCI/UCIN disponibles para transferir a piso."""

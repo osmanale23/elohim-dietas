@@ -167,6 +167,12 @@ body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
   border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; transition:background 0.2s;
 }
 .discharge-btn:hover { background:#FDEDEC; }
+.delete-btn {
+  background:#FDEDEC; color:#922B21;
+  border:1.5px solid #E74C3C; padding:8px 12px;
+  border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; transition:background 0.2s;
+}
+.delete-btn:hover { background:#F5B7B1; }
 /* TRANSFER SECTION */
 .transfer-section {
   background:white; border-radius:14px; padding:20px;
@@ -440,7 +446,13 @@ body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
                     Marcar como Recibido
                   </button>
                   {% endif %}
-                  <button onclick="openEditMeal({{ ord['id'] }}, '{{ od }}', '{{ ord.get('condition','normal') }}', {{ ord.get('dieta_cero',0) }}, {{ (ord.get('meal_notes') or '')|tojson }})"
+                  <button
+                    data-order-id="{{ ord['id'] }}"
+                    data-diet="{{ od }}"
+                    data-condition="{{ ord.get('condition','normal') }}"
+                    data-dieta-cero="{{ ord.get('dieta_cero',0) }}"
+                    data-notes="{{ (ord.get('meal_notes') or '')|e }}"
+                    onclick="openEditMealFromBtn(this)"
                     style="background:#F3E5F5;color:#6A1B9A;border:1px solid #CE93D8;border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;">
                     ✏️ Editar
                   </button>
@@ -485,6 +497,7 @@ body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
       <div class="card-actions">
         <button class="edit-btn" onclick="openAddMeal({{ p.id }}, '{{ p.name }}', '{{ p.diet_type }}', '{{ p.condition }}')">📋 Agregar Comida</button>
         <button class="discharge-btn" onclick="discharge({{ p.id }}, '{{ p.name }}')">🏥 Alta</button>
+        <button class="delete-btn" onclick="deletePatient({{ p.id }}, '{{ p.name|e }}')">🗑️</button>
       </div>
     </div>
     {% endfor %}
@@ -666,13 +679,17 @@ body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
         </select>
       </div>
       <div class="form-group">
-        <label>Tiempo de Comida Actual</label>
+        <label>Tiempo de Comida</label>
         <select id="addMealTime">
           <option value="desayuno">🌅 Desayuno — 7:30 AM</option>
           <option value="almuerzo">☀️ Almuerzo — 12:30 PM</option>
           <option value="cena">🌙 Cena — 6:30 PM</option>
         </select>
       </div>
+    </div>
+    <div class="form-group">
+      <label>📅 Fecha de la Comida</label>
+      <input type="date" id="addMealDate" style="width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;color:var(--dark);">
     </div>
 
     <!-- Dieta Cero para primer registro -->
@@ -855,7 +872,7 @@ async function saveAddMeal() {
 function openAdd() {
   const nurse = document.getElementById('nurseSelect').value;
   if (!nurse) { showToast('⚠️ Selecciona tu nombre primero'); return; }
-  document.getElementById('addMealDate') && (document.getElementById('addMealDate').value = new Date().toISOString().slice(0,10));
+  document.getElementById('addMealDate').value = new Date().toISOString().slice(0,10);
   document.getElementById('addModal').classList.add('active');
 }
 function closeAdd() { document.getElementById('addModal').classList.remove('active'); }
@@ -871,7 +888,7 @@ async function saveAdd() {
       edad: document.getElementById('addEdad').value || null,
       sexo: document.getElementById('addSexo').value,
       meal_time: document.getElementById('addMealTime').value,
-      meal_date: new Date().toISOString().slice(0,10),
+      meal_date: document.getElementById('addMealDate').value || new Date().toISOString().slice(0,10),
       diet_type: dieta_cero ? 'cero' : document.getElementById('addDiet').value,
       condition: document.getElementById('addCondition').value,
       meal_notes: document.getElementById('addNotes').value,
@@ -880,6 +897,17 @@ async function saveAdd() {
     })
   });
   if ((await r.json()).ok) { showToast('Paciente registrado ✓'); setTimeout(()=>location.reload(), 1000); }
+}
+
+// ── EDITAR PEDIDO — wrapper desde data-attributes ────────────
+function openEditMealFromBtn(btn) {
+  openEditMeal(
+    btn.dataset.orderId,
+    btn.dataset.diet,
+    btn.dataset.condition,
+    parseInt(btn.dataset.dietaCero),
+    btn.dataset.notes
+  );
 }
 
 // ── EDITAR PEDIDO DE COMIDA ───────────────────────────────────
@@ -967,6 +995,20 @@ async function discharge(id, name) {
     showToast(`${name} dado de alta`);
     document.getElementById(`card-${id}`).style.opacity = '0.3';
     setTimeout(()=>location.reload(), 1200);
+  }
+}
+
+// ── ELIMINAR PACIENTE ─────────────────────────────────────────
+async function deletePatient(id, name) {
+  if (!confirm(`⚠️ ¿ELIMINAR el perfil de ${name}?\n\nEsto borrará el paciente y TODAS sus comidas permanentemente. Esta acción no se puede deshacer.`)) return;
+  const r = await fetch(`/api/patient/${id}/delete`, {method:'DELETE'});
+  const res = await r.json();
+  if (res.ok) {
+    showToast(`🗑️ Perfil de ${name} eliminado`);
+    const card = document.getElementById(`card-${id}`);
+    if (card) card.remove();
+  } else {
+    showToast('❌ Error al eliminar: ' + (res.error || 'desconocido'));
   }
 }
 </script>

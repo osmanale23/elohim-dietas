@@ -341,15 +341,19 @@
                 </button>
               {% else %}
               {# Opciones seleccionables combinadas: menú del día + Dra. Eridania #}
-              {% if o_cond == 'diabetico' %}
+              {# La dieta siempre tiene prioridad; la condición (diabético) solo aplica en corriente #}
+              {% if o_diet == 'liquida' %}
+                {% set day_items = diet_options.get('liquida', {}).get(meal_key, []) %}
+                {% set extra_items = [] %}
+              {% elif o_diet == 'blanda' %}
+                {% set day_items = diet_options.get('blanda', {}).get(meal_key, []) %}
+                {% set extra_items = cafeteria_options.get('blanda', {}).get(meal_key, []) %}
+              {% elif o_cond == 'diabetico' %}
                 {% set day_items = menu_diabetico.get(today_day, {}).get(meal_key, []) %}
                 {% set extra_items = cafeteria_options.get('diabetico', {}).get(meal_key, []) %}
               {% elif o_diet == 'corriente' %}
                 {% set day_items = menu_normal.get(today_day, {}).get(meal_key, []) %}
                 {% set extra_items = cafeteria_options.get('corriente', {}).get(meal_key, []) %}
-              {% elif o_diet == 'blanda' %}
-                {% set day_items = diet_options.get('blanda', {}).get(meal_key, []) %}
-                {% set extra_items = cafeteria_options.get('blanda', {}).get(meal_key, []) %}
               {% else %}
                 {% set day_items = diet_options.get(o_diet, {}).get(meal_key, []) %}
                 {% set extra_items = [] %}

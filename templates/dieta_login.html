@@ -61,14 +61,20 @@
   .role-caf { background: #EAF5EA; color: var(--green); }
   .role-ger { background: #FEF9E7; color: #D4AC0D; }
   label { display:block; text-align:left; font-size:11px; color:var(--mid); margin-bottom:8px; letter-spacing:1px; text-transform:uppercase; font-family:sans-serif; }
-  input[type=password] {
-    width: 100%; padding: 14px 18px;
+  .pw-wrap { position: relative; }
+  .pw-wrap input {
+    width: 100%; padding: 14px 48px 14px 18px;
     border: 1.5px solid var(--border);
     border-radius: 10px; font-size: 16px;
     color: var(--dark); background: var(--bone);
     outline: none; transition: border 0.2s;
   }
-  input[type=password]:focus { border-color: var(--green); background: var(--white); }
+  .pw-wrap input:focus { border-color: var(--green); background: var(--white); }
+  .pw-toggle {
+    position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+    background: none; border: none; cursor: pointer; padding: 0;
+    color: var(--mid); font-size: 18px; line-height: 1;
+  }
   .btn {
     width: 100%; margin-top: 18px; padding: 15px;
     background: var(--green); color: white;
@@ -103,10 +109,21 @@
   </div>
   <form method="POST">
     <label>Contraseña de acceso</label>
-    <input type="password" name="password" placeholder="••••••••••••" autofocus required>
+    <div class="pw-wrap">
+      <input type="password" id="pwInput" name="password" placeholder="••••••••••••" autofocus required>
+      <button type="button" class="pw-toggle" onclick="togglePw()" id="pwBtn">👁️</button>
+    </div>
     {% if error %}<div class="error">{{ error }}</div>{% endif %}
     <button type="submit" class="btn">Entrar</button>
   </form>
+  <script>
+    function togglePw() {
+      const inp = document.getElementById('pwInput');
+      const btn = document.getElementById('pwBtn');
+      if (inp.type === 'password') { inp.type = 'text'; btn.textContent = '🙈'; }
+      else { inp.type = 'password'; btn.textContent = '👁️'; }
+    }
+  </script>
   <div class="footer">Gestión nutricional de pacientes internados</div>
 </div>
 </body>

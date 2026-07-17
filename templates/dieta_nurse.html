@@ -434,8 +434,12 @@ body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
                 {% endif %}
                 <!-- Hora de creación -->
                 {% if ord.get('created_at') %}
+                {% set h = ord['created_at'][11:13]|int %}
+                {% set m = ord['created_at'][14:16] %}
+                {% set ampm = 'AM' if h < 12 else 'PM' %}
+                {% set h12 = 12 if h == 0 else (h if h <= 12 else h - 12) %}
                 <div style="font-size:10px;color:#1B5E20;background:#E8F5E9;border-left:3px solid #43A047;padding:4px 8px;border-radius:4px;margin-top:6px;">
-                  🕐 Creado {{ ord['created_at'][11:16] }} hrs{% if ord.get('created_by') %} por <strong>{{ ord['created_by'] }}</strong>{% endif %}
+                  🕐 Creado {{ h12 }}:{{ m }} {{ ampm }}{% if ord.get('created_by') %} por <strong>{{ ord['created_by'] }}</strong>{% endif %}
                 </div>
                 {% endif %}
                 <!-- Audit trail -->

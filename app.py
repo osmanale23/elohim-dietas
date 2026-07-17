@@ -7,7 +7,11 @@ import os
 import json
 import psycopg2
 from psycopg2.extras import RealDictCursor
-from datetime import datetime, date
+from datetime import datetime, date, timezone, timedelta
+
+DR_TZ = timezone(timedelta(hours=-4))
+def now_dr():
+    return datetime.now(DR_TZ).strftime('%Y-%m-%d %H:%M:%S')
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 from dotenv import load_dotenv
 
@@ -432,6 +436,8 @@ def init_db():
         "ALTER TABLE meal_orders ADD COLUMN IF NOT EXISTS updated_by TEXT",
         "ALTER TABLE meal_orders ADD COLUMN IF NOT EXISTS deleted_at TEXT DEFAULT NULL",
         "ALTER TABLE meal_orders ADD COLUMN IF NOT EXISTS deleted_by TEXT DEFAULT NULL",
+        "ALTER TABLE meal_orders ADD COLUMN IF NOT EXISTS created_at TEXT DEFAULT NULL",
+        "ALTER TABLE meal_orders ADD COLUMN IF NOT EXISTS created_by TEXT DEFAULT NULL",
     ]:
         cur.execute(stmt)
     conn.commit()
@@ -603,7 +609,7 @@ def add_patient():
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     nurse_name = session.get('nurse_name', role)
-    now_str = datetime.now().isoformat(timespec='seconds')
+    now_str = now_dr()
     cur.execute(
         '''INSERT INTO patients (name, floor, room, diet_type, condition, edad, sexo, notes, registered_by, created_at)
            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id''',
@@ -615,12 +621,12 @@ def add_patient():
     today_str = date.today().strftime('%Y-%m-%d')
     meal_date = d.get('meal_date', today_str)
     cur.execute(
-        '''INSERT INTO meal_orders (patient_id, order_date, meal_date, meal_time, diet_type, condition, meal_notes, dieta_cero, options_selected, confirmed, extra_notes)
-           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,0,%s)''',
+        '''INSERT INTO meal_orders (patient_id, order_date, meal_date, meal_time, diet_type, condition, meal_notes, dieta_cero, options_selected, confirmed, extra_notes, created_at, created_by)
+           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,0,%s,%s,%s)''',
         (pid, today_str, meal_date, meal_time,
          d.get('diet_type', 'corriente'), d.get('condition', 'normal'),
          d.get('meal_notes', ''), 1 if d.get('dieta_cero') else 0,
-         '[]', d.get('notes', ''))
+         '[]', d.get('notes', ''), now_str, nurse_name)
     )
     conn.commit()
     cur.close()
@@ -661,13 +667,14 @@ def add_meal(pid):
         (pid, meal_date, meal_time)
     )
     if not cur.fetchone():
+        nurse_name = session.get('nurse_name', session.get('dieta_role', ''))
         cur.execute(
-            '''INSERT INTO meal_orders (patient_id, order_date, meal_date, meal_time, diet_type, condition, meal_notes, dieta_cero, options_selected, confirmed, extra_notes)
-               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,0,%s)''',
+            '''INSERT INTO meal_orders (patient_id, order_date, meal_date, meal_time, diet_type, condition, meal_notes, dieta_cero, options_selected, confirmed, extra_notes, created_at, created_by)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,0,%s,%s,%s)''',
             (pid, today_str, meal_date, meal_time,
              d.get('diet_type', 'corriente'), d.get('condition', 'normal'),
              d.get('meal_notes', ''), 1 if d.get('dieta_cero') else 0,
-             '[]', d.get('meal_notes', ''))
+             '[]', d.get('meal_notes', ''), now_dr(), nurse_name)
         )
         conn.commit()
         result = {'ok': True, 'created': True}

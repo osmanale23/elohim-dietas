@@ -432,6 +432,12 @@ body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
                 {% if ord.get('meal_notes') %}
                 <div class="meal-notes-text">📝 {{ ord['meal_notes'] }}</div>
                 {% endif %}
+                <!-- Hora de creación -->
+                {% if ord.get('created_at') %}
+                <div style="font-size:10px;color:#1B5E20;background:#E8F5E9;border-left:3px solid #43A047;padding:4px 8px;border-radius:4px;margin-top:6px;">
+                  🕐 Creado {{ ord['created_at'][11:16] }} hrs{% if ord.get('created_by') %} por <strong>{{ ord['created_by'] }}</strong>{% endif %}
+                </div>
+                {% endif %}
                 <!-- Audit trail -->
                 {% if ord.get('updated_at') %}
                 <div style="font-size:10px;color:#B71C1C;background:#FFF3E0;border-left:3px solid #FF6D00;padding:4px 8px;border-radius:4px;margin-top:6px;">

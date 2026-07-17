@@ -305,7 +305,23 @@
                   {% if o_diet != p.diet_type %}
                   <span style="font-size:9px;color:#E67E22;margin-left:3px;">⚡ cambio</span>
                   {% endif %}
-                  {# Opciones seleccionadas por cafetería #}
+                  {# Menú esperado del día #}
+                  {% set ord_day = order.get('meal_day') or today_day %}
+                  {% if o_cond == 'diabetico' %}
+                    {% set expected = menu_diabetico.get(ord_day, {}).get(meal_key, []) %}
+                  {% elif o_diet == 'corriente' %}
+                    {% set expected = menu_normal.get(ord_day, {}).get(meal_key, []) %}
+                  {% else %}
+                    {% set expected = diet_options.get(o_diet, {}).get(meal_key, []) %}
+                  {% endif %}
+                  {% if expected %}
+                  <div style="margin-top:4px;padding:4px 6px;background:#F5FAF7;border-left:2px solid #A8D5B5;border-radius:4px;">
+                    {% for item in expected %}
+                    <div style="font-size:10px;color:#2E5A3A;">🍽️ {{ item }}</div>
+                    {% endfor %}
+                  </div>
+                  {% endif %}
+                  {# Opciones confirmadas por cafetería (override) #}
                   {% if order.get('options_selected') and order['options_selected'] != '[]' %}
                   <div style="font-size:10px;color:var(--mid);margin-top:3px;line-height:1.5;">
                     {% for opt in order['options_selected']|replace('[','',1)|replace(']','',1)|replace('"','',)|split(', ') %}

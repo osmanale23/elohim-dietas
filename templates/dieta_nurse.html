@@ -284,6 +284,9 @@ body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
     {% for n in nurses %}
     <option value="{{ n }}" {% if n == active_nurse %}selected{% endif %}>{{ n }}</option>
     {% endfor %}
+    {% if active_nurse and active_nurse not in nurses %}
+    <option value="{{ active_nurse }}" selected>✏️ {{ active_nurse }} (cubriendo turno)</option>
+    {% endif %}
     <option value="__otra__">✏️ Otra (escribir nombre)</option>
   </select>
   <input class="nurse-other-input" id="nurseOtherInput" type="text" placeholder="Nombre completo...">

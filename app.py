@@ -410,6 +410,7 @@ def init_db():
         "ALTER TABLE patients ADD COLUMN IF NOT EXISTS active INTEGER DEFAULT 1",
         "ALTER TABLE patients ADD COLUMN IF NOT EXISTS registered_by TEXT",
         "ALTER TABLE patients ADD COLUMN IF NOT EXISTS updated_at TEXT",
+        "ALTER TABLE patients ADD COLUMN IF NOT EXISTS updated_by TEXT",
     ]:
         cur.execute(stmt)
     cur.execute('''
@@ -578,6 +579,7 @@ def dieta_nurse():
                            role=role,
                            role_name=ROLE_NAMES[role],
                            floor_label=FLOOR_LABEL[role],
+                           floor_label_map=FLOOR_LABEL,
                            today=today_str,
                            today_day=today_day,
                            today_label=today_lbl,
@@ -662,6 +664,42 @@ def update_patient(pid):
     cur.close()
     conn.close()
     return jsonify({'ok': True})
+
+
+@app.route('/api/patient/<int:pid>/move', methods=['POST'])
+def move_patient(pid):
+    """Cambiar de habitación/cama a un paciente ya registrado, dentro del mismo
+    piso o hacia otro piso distinto. Solo puede moverlo la enfermera del piso
+    donde el paciente está activo actualmente. Cambio directo, sin confirmación
+    del piso destino."""
+    if nurse_required(): return jsonify({'error': 'unauthorized'}), 403
+    role = session['dieta_role']
+    d = request.json or {}
+    new_floor = d.get('floor', '').strip()
+    new_room  = d.get('room', '').strip()
+    if not new_floor or new_floor not in FLOOR_LABEL:
+        return jsonify({'error': 'Piso inválido'}), 400
+    if not new_room:
+        return jsonify({'error': 'Habitación o cama requerida'}), 400
+    conn = get_db()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute('SELECT * FROM patients WHERE id=%s AND active=1', (pid,))
+    patient = cur.fetchone()
+    if not patient:
+        cur.close(); conn.close()
+        return jsonify({'error': 'Paciente no encontrado'}), 404
+    if patient['floor'] != role:
+        cur.close(); conn.close()
+        return jsonify({'error': 'Solo el piso donde está activo el paciente puede moverlo'}), 403
+    mover = session.get('nurse_name', role)
+    cur.execute(
+        'UPDATE patients SET floor=%s, room=%s, updated_at=%s, updated_by=%s WHERE id=%s',
+        (new_floor, new_room, now_dr(), mover, pid)
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+    return jsonify({'ok': True, 'from_floor': patient['floor'], 'to_floor': new_floor, 'room': new_room})
 
 
 @app.route('/api/patient/<int:pid>/add-meal', methods=['POST'])

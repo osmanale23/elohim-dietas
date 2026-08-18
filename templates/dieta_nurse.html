@@ -154,13 +154,20 @@ body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
   border:1px solid #FFE082; border-radius:6px; padding:8px 10px;
   margin-bottom:10px; line-height:1.5;
 }
-.card-actions { display:flex; gap:8px; margin-top:10px; }
+.card-actions { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
 .edit-btn {
   flex:1; background:#EEF6F0; color:var(--green);
   border:1px solid var(--green-xl); padding:8px 0;
   border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; transition:background 0.2s;
 }
 .edit-btn:hover { background:var(--green-xl); }
+.move-btn {
+  flex:1; background:#EAF4FB; color:#2980B9;
+  border:1px solid #AED6F1; padding:8px 0;
+  border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; transition:background 0.2s;
+  white-space:nowrap;
+}
+.move-btn:hover { background:#D4E9F7; }
 .discharge-btn {
   background:#FFF0F0; color:#C0392B;
   border:1px solid #F5C6C6; padding:8px 12px;
@@ -520,6 +527,7 @@ body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
 
       <div class="card-actions">
         <button class="edit-btn" onclick="openAddMeal({{ p.id }}, '{{ p.name }}', '{{ p.diet_type }}', '{{ p.condition }}')">📋 Agregar Comida</button>
+        <button class="move-btn" onclick="openMove({{ p.id }}, '{{ p.name }}')">🔀 Cambiar Habitación</button>
         <button class="discharge-btn" onclick="discharge({{ p.id }}, '{{ p.name }}')">🏥 Alta</button>
       </div>
     </div>
@@ -776,6 +784,35 @@ body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
   </div>
 </div>
 
+<!-- MODAL CAMBIAR HABITACIÓN / PISO -->
+<div class="modal-overlay" id="moveModal">
+  <div class="modal">
+    <div class="modal-title">🔀 Cambiar Habitación / Piso</div>
+    <p id="movePatientName" style="font-size:14px;font-weight:600;color:var(--mid);margin-bottom:16px;"></p>
+    <div class="form-group">
+      <label>Piso / Unidad</label>
+      <select id="moveFloor" onchange="onMoveFloorChange()">
+        {% for fk, fl in floor_label_map.items() %}
+        <option value="{{ fk }}" {% if fk == role %}selected{% endif %}>{{ fl }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group">
+      <label id="moveRoomLabel">Habitación</label>
+      <div id="moveRoomFieldWrap">
+        <input type="text" id="moveRoom" placeholder="Ej: 501">
+      </div>
+    </div>
+    <p style="font-size:12px;color:#856404;background:#FFF8CD;border:1px solid #FFE082;border-radius:6px;padding:8px 10px;">
+      ⚠️ El paciente pasará a la lista activa del piso seleccionado de inmediato.
+    </p>
+    <div class="modal-actions">
+      <button class="cancel-btn" onclick="closeMove()">Cancelar</button>
+      <button class="save-btn" onclick="saveMove()">Confirmar Cambio</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -940,6 +977,55 @@ async function saveAdd() {
     })
   });
   if ((await r.json()).ok) { showToast('Paciente registrado ✓'); setTimeout(()=>location.reload(), 1000); }
+}
+
+// ── CAMBIAR HABITACIÓN / PISO ──────────────────────────────────
+const BED_BASED_FLOORS = ['uci', 'piso9']; // pisos/unidades con camas numeradas 1-5 en vez de habitación libre
+let _movePid = null;
+function openMove(pid, name) {
+  _movePid = pid;
+  document.getElementById('movePatientName').textContent = '👤 ' + name;
+  document.getElementById('moveFloor').value = "{{ role }}";
+  onMoveFloorChange();
+  document.getElementById('moveModal').classList.add('active');
+}
+function closeMove() {
+  document.getElementById('moveModal').classList.remove('active');
+  _movePid = null;
+}
+function onMoveFloorChange() {
+  const floor = document.getElementById('moveFloor').value;
+  const label = document.getElementById('moveRoomLabel');
+  const wrap = document.getElementById('moveRoomFieldWrap');
+  if (BED_BASED_FLOORS.includes(floor)) {
+    label.textContent = 'Cama';
+    const prefix = floor === 'piso9' ? 'Cama #' : 'Cama ';
+    let opts = '';
+    for (let i = 1; i <= 5; i++) { opts += `<option value="${i}">${prefix}${i}</option>`; }
+    wrap.innerHTML = `<select id="moveRoom">${opts}</select>`;
+  } else {
+    label.textContent = 'Habitación';
+    const ph = floor === 'emergencia' ? 'Sala ER' : 'Ej: 501';
+    wrap.innerHTML = `<input type="text" id="moveRoom" placeholder="${ph}">`;
+  }
+}
+async function saveMove() {
+  if (!_movePid) return;
+  const floor = document.getElementById('moveFloor').value;
+  const room = document.getElementById('moveRoom').value.trim();
+  if (!room) { showToast('⚠️ Indica la habitación o cama'); return; }
+  const r = await fetch(`/api/patient/${_movePid}/move`, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ floor, room })
+  });
+  const res = await r.json();
+  if (res.ok) {
+    showToast('✅ Paciente movido correctamente');
+    closeMove();
+    setTimeout(() => location.reload(), 1000);
+  } else {
+    showToast('⚠️ ' + (res.error || 'Error al mover paciente'));
+  }
 }
 
 // ── EDITAR PEDIDO — wrapper desde data-attributes ────────────

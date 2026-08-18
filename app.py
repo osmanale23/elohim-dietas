@@ -23,6 +23,7 @@ app.secret_key = os.environ.get('SECRET_KEY', 'dieta-elohim-2025')
 PASSWORDS = {
     'piso5':       os.environ.get('PASS_PISO5',  'Piso5Elohim'),
     'piso6':       os.environ.get('PASS_PISO6',  'Piso6Elohim'),
+    'piso9':       os.environ.get('PASS_PISO9',  'Piso9Elohim'),
     'uci':         os.environ.get('PASS_UCI',    'UCIElohim'),
     'emergencia':  os.environ.get('PASS_EMG',    'EmergenciaElohim'),
     'ucin':        os.environ.get('PASS_UCIN',   'UCINElohim'),
@@ -33,6 +34,7 @@ PASSWORDS = {
 ROLE_NAMES = {
     'piso5':      'Enfermería — Piso 5',
     'piso6':      'Enfermería — Piso 6',
+    'piso9':      'Enfermería — Piso 9',
     'uci':        'Enfermería — UCI',
     'emergencia': 'Enfermería — Emergencia',
     'ucin':       'Enfermería — UCIN',
@@ -43,10 +45,14 @@ ROLE_NAMES = {
 FLOOR_LABEL = {
     'piso5':      'Piso 5',
     'piso6':      'Piso 6',
+    'piso9':      'Piso 9',
     'uci':        'UCI',
     'emergencia': 'Emergencia',
     'ucin':       'UCIN',
 }
+
+# Pisos/unidades cuyas "habitaciones" son en realidad camas numeradas (dropdown 1-5)
+BED_BASED_FLOORS = ('uci', 'piso9')
 
 NURSES = [
     'YUSMARI LOPEZ',
@@ -475,7 +481,12 @@ def dieta_logout():
     return redirect(url_for('dieta_login'))
 
 
-NURSE_ROLES = ('piso5', 'piso6', 'uci', 'emergencia', 'ucin')
+NURSE_ROLES = ('piso5', 'piso6', 'piso9', 'uci', 'emergencia', 'ucin')
+
+# Pisos que pueden RECIBIR pacientes transferidos (piso5, piso6, piso9)
+TRANSFER_DEST_FLOORS = ('piso5', 'piso6', 'piso9')
+# Unidades que sirven de ORIGEN para transferencias (emergencia/uci/ucin/piso9)
+TRANSFER_SOURCE_FLOORS = ('emergencia', 'uci', 'ucin', 'piso9')
 
 def nurse_required():
     role = session.get('dieta_role')
@@ -517,11 +528,13 @@ def dieta_nurse():
         (role,)
     )
     orders = cur.fetchall()
-    # Pacientes transferibles (solo para piso5 y piso6)
+    # Pacientes transferibles (piso5, piso6 y piso9 pueden recibir)
     transferable = []
-    if role in ('piso5', 'piso6'):
+    if role in TRANSFER_DEST_FLOORS:
+        placeholders = ','.join(['%s'] * len(TRANSFER_SOURCE_FLOORS))
         cur.execute(
-            "SELECT * FROM patients WHERE floor IN ('emergencia','uci','ucin') AND active=1 ORDER BY floor, created_at DESC"
+            f"SELECT * FROM patients WHERE floor IN ({placeholders}) AND floor != %s AND active=1 ORDER BY floor, created_at DESC",
+            (*TRANSFER_SOURCE_FLOORS, role)
         )
         transferable = cur.fetchall()
     cur.close()
@@ -721,12 +734,14 @@ def transferable_patients():
     redir = nurse_required()
     if redir: return jsonify({'error': 'unauthorized'}), 403
     role = session['dieta_role']
-    if role not in ('piso5', 'piso6'):
+    if role not in TRANSFER_DEST_FLOORS:
         return jsonify({'patients': []})
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
+    placeholders = ','.join(['%s'] * len(TRANSFER_SOURCE_FLOORS))
     cur.execute(
-        "SELECT * FROM patients WHERE floor IN ('emergencia','uci','ucin') AND active=1 ORDER BY floor, created_at DESC"
+        f"SELECT * FROM patients WHERE floor IN ({placeholders}) AND floor != %s AND active=1 ORDER BY floor, created_at DESC",
+        (*TRANSFER_SOURCE_FLOORS, role)
     )
     patients = [dict(p) for p in cur.fetchall()]
     cur.close()
@@ -740,7 +755,7 @@ def transfer_patient(pid):
     redir = nurse_required()
     if redir: return jsonify({'error': 'unauthorized'}), 403
     role = session['dieta_role']
-    if role not in ('piso5', 'piso6'):
+    if role not in TRANSFER_DEST_FLOORS:
         return jsonify({'error': 'Solo enfermeras de piso pueden recibir transferencias'}), 403
     d = request.json
     new_room = d.get('room', '').strip()
@@ -751,7 +766,7 @@ def transfer_patient(pid):
     # Verificar que el paciente está en una unidad transferible
     cur.execute('SELECT * FROM patients WHERE id=%s AND active=1', (pid,))
     patient = cur.fetchone()
-    if not patient or patient['floor'] not in ('emergencia', 'uci', 'ucin'):
+    if not patient or patient['floor'] not in TRANSFER_SOURCE_FLOORS or patient['floor'] == role:
         cur.close(); conn.close()
         return jsonify({'error': 'Paciente no transferible'}), 400
     origin_floor = patient['floor']

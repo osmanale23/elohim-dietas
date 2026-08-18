@@ -10,7 +10,7 @@
     --bone:#F7F3EE; --white:#fff;
     --green:#4E7C5F; --green-l:#7FAE8E; --green-xl:#D1E8DA;
     --dark:#243B2E; --mid:#4A6050; --border:#DDD5C8;
-    --p5:#2980B9; --p6:#8E44AD; --uci:#C0392B; --emg:#E74C3C; --ucin:#6A1B9A;
+    --p5:#2980B9; --p6:#8E44AD; --p9:#16A085; --uci:#C0392B; --emg:#E74C3C; --ucin:#6A1B9A;
   }
   body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
   .header {
@@ -58,6 +58,7 @@
   .floor-dot { width:10px; height:10px; border-radius:50%; }
   .floor-p5  { background:var(--p5); }
   .floor-p6  { background:var(--p6); }
+  .floor-p9  { background:var(--p9); }
   .floor-uci { background:var(--uci); }
   .floor-emg { background:var(--emg); }
   .floor-ucin{ background:var(--ucin); }
@@ -92,6 +93,7 @@
   }
   .patient-row.floor-piso5 { border-left-color:var(--p5); }
   .patient-row.floor-piso6 { border-left-color:var(--p6); }
+  .patient-row.floor-piso9 { border-left-color:var(--p9); }
   .patient-row.floor-uci   { border-left-color:var(--uci); }
   .patient-info { display:flex; align-items:center; gap:12px; margin-bottom:14px; flex-wrap:wrap; }
   .patient-name { font-size:15px; font-weight:700; color:var(--dark); }
@@ -259,7 +261,7 @@
   <!-- MEAL TABS CONTENT -->
   {% for meal_key, meal_label, meal_time in meal_times %}
   <div class="meal-tab-content" id="tab-{{ meal_key }}" style="display:{% if loop.first %}block{% else %}none{% endif %}">
-    {% set floors = [('piso5','Piso 5','floor-p5'), ('piso6','Piso 6','floor-p6'), ('uci','UCI','floor-uci'), ('emergencia','Emergencia','floor-emg'), ('ucin','UCIN','floor-ucin')] %}
+    {% set floors = [('piso5','Piso 5','floor-p5'), ('piso6','Piso 6','floor-p6'), ('piso9','Piso 9','floor-p9'), ('uci','UCI','floor-uci'), ('emergencia','Emergencia','floor-emg'), ('ucin','UCIN','floor-ucin')] %}
     {% for floor_key, floor_name, floor_class in floors %}
       {% set floor_patients = patients|selectattr('floor','equalto',floor_key)|list %}
       {% if floor_patients %}
@@ -278,7 +280,7 @@
           <div class="patient-row floor-{{ p.floor }}">
             <div class="patient-info">
               <span class="patient-name">{{ p.name }}</span>
-              <span class="room-tag">Hab. {{ p.room }}</span>
+              <span class="room-tag">{% if p.floor == 'uci' %}Cama {% elif p.floor == 'piso9' %}Cama #{% else %}Hab. {% endif %}{{ p.room }}</span>
               {% if o_cero %}
               <span class="badge" style="background:#FDECEA;color:#C0392B;border:1px solid #F5C6C6;">⛔ Dieta Cero</span>
               {% elif o_diet == 'otra' %}

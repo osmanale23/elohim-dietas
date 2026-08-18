@@ -355,7 +355,7 @@ body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
     <div class="patient-card" id="card-{{ p.id }}">
       <div class="card-top">
         <div class="patient-name">{{ p.name }}</div>
-        <div class="room-tag">{% if role == 'uci' %}Cama {% endif %}{{ p.room }}</div>
+        <div class="room-tag">{% if role == 'uci' %}Cama {% elif role == 'piso9' %}Cama #{% endif %}{{ p.room }}</div>
       </div>
 
       <!-- COMIDAS PENDIENTES HOY -->
@@ -540,7 +540,7 @@ body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
     <div class="modal-title">🔄 Recibir Paciente en {{ floor_label }}</div>
     <p id="transferPatientName" style="font-size:14px;font-weight:600;color:var(--mid);margin-bottom:16px;"></p>
     <div class="form-group">
-      <label>{% if role == 'uci' %}Número de Cama{% else %}Número de Habitación{% endif %}</label>
+      <label>{% if role in ('uci','piso9') %}Número de Cama{% else %}Número de Habitación{% endif %}</label>
       {% if role == 'uci' %}
       <select id="transferRoom">
         <option value="1">Cama 1</option>
@@ -548,6 +548,14 @@ body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
         <option value="3">Cama 3</option>
         <option value="4">Cama 4</option>
         <option value="5">Cama 5</option>
+      </select>
+      {% elif role == 'piso9' %}
+      <select id="transferRoom">
+        <option value="1">Cama #1</option>
+        <option value="2">Cama #2</option>
+        <option value="3">Cama #3</option>
+        <option value="4">Cama #4</option>
+        <option value="5">Cama #5</option>
       </select>
       {% else %}
       <input type="text" id="transferRoom" placeholder="Ej: 501">
@@ -679,7 +687,7 @@ body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
     </div>
     <div class="row2">
       <div class="form-group">
-        <label>{% if role == 'uci' %}Cama{% else %}Habitación{% endif %}</label>
+        <label>{% if role in ('uci','piso9') %}Cama{% else %}Habitación{% endif %}</label>
         {% if role == 'uci' %}
         <select id="addRoom">
           <option value="1">Cama 1</option>
@@ -687,6 +695,14 @@ body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
           <option value="3">Cama 3</option>
           <option value="4">Cama 4</option>
           <option value="5">Cama 5</option>
+        </select>
+        {% elif role == 'piso9' %}
+        <select id="addRoom">
+          <option value="1">Cama #1</option>
+          <option value="2">Cama #2</option>
+          <option value="3">Cama #3</option>
+          <option value="4">Cama #4</option>
+          <option value="5">Cama #5</option>
         </select>
         {% else %}
         <input type="text" id="addRoom" placeholder="{% if role == 'emergencia' %}Sala ER{% else %}Ej: 501{% endif %}">

@@ -12,6 +12,12 @@ from datetime import datetime, date, timezone, timedelta
 DR_TZ = timezone(timedelta(hours=-4))
 def now_dr():
     return datetime.now(DR_TZ).strftime('%Y-%m-%d %H:%M:%S')
+def today_dr():
+    """Fecha de HOY en hora de República Dominicana (UTC-4), no la del servidor (UTC).
+    Sin esto, entre 8pm y medianoche hora RD el servidor ya "cree" que es el día
+    siguiente y los pedidos registrados en esa ventana quedan con la fecha
+    equivocada — invisibles para cafetería cuando busca "hoy"."""
+    return datetime.now(DR_TZ).date()
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 from dotenv import load_dotenv
 
@@ -175,7 +181,7 @@ MONTH_NAMES_ES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
                   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
 
 def today_label_es(d=None):
-    d = d or date.today()
+    d = d or today_dr()
     return f"{DAY_NAMES_ES[d.weekday()]}, {d.day} de {MONTH_NAMES_ES[d.month - 1]} {d.year}"
 
 MENU_NORMAL = {
@@ -512,8 +518,8 @@ def dieta_nurse():
     redir = nurse_required()
     if redir: return redir
     role = session['dieta_role']
-    today_str = date.today().strftime('%Y-%m-%d')
-    today_day = DAY_NAMES[date.today().weekday()]
+    today_str = today_dr().strftime('%Y-%m-%d')
+    today_day = DAY_NAMES[today_dr().weekday()]
     today_lbl = today_label_es()
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
@@ -598,7 +604,7 @@ def floor_status():
     redir = nurse_required()
     if redir: return jsonify({'error': 'unauthorized'}), 403
     role = session['dieta_role']
-    today_str = date.today().strftime('%Y-%m-%d')
+    today_str = today_dr().strftime('%Y-%m-%d')
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     cur.execute(
@@ -633,7 +639,7 @@ def add_patient():
     )
     pid = cur.fetchone()['id']
     meal_time = d.get('meal_time', 'desayuno')
-    today_str = date.today().strftime('%Y-%m-%d')
+    today_str = today_dr().strftime('%Y-%m-%d')
     meal_date = d.get('meal_date', today_str)
     cur.execute(
         '''INSERT INTO meal_orders (patient_id, order_date, meal_date, meal_time, diet_type, condition, meal_notes, dieta_cero, options_selected, confirmed, extra_notes, created_at, created_by)
@@ -707,7 +713,7 @@ def add_meal(pid):
     """Agregar un pedido de comida a un paciente ya registrado (sin duplicar el paciente)."""
     if nurse_required(): return jsonify({'error': 'unauthorized'}), 403
     d = request.json
-    today_str = date.today().strftime('%Y-%m-%d')
+    today_str = today_dr().strftime('%Y-%m-%d')
     meal_time = d.get('meal_time', 'almuerzo')
     meal_date = d.get('meal_date', today_str)
     conn = get_db()
@@ -823,7 +829,7 @@ def transfer_patient(pid):
 def dieta_cafeteria():
     if session.get('dieta_role') != 'cafeteria':
         return redirect(url_for('dieta_login'))
-    today = request.args.get('date', date.today().strftime('%Y-%m-%d'))
+    today = request.args.get('date', today_dr().strftime('%Y-%m-%d'))
     today_date_obj = datetime.strptime(today, '%Y-%m-%d').date()
     today_day = DAY_NAMES[today_date_obj.weekday()]
     conn = get_db()
@@ -862,7 +868,7 @@ def nurse_received():
     redir = nurse_required()
     if redir: return jsonify({'error': 'unauthorized'}), 403
     d = request.json
-    today_str = date.today().strftime('%Y-%m-%d')
+    today_str = today_dr().strftime('%Y-%m-%d')
     meal_date = d.get('meal_date') or today_str
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
@@ -964,7 +970,7 @@ def save_order():
 def dieta_gerencia():
     if session.get('dieta_role') != 'gerencia':
         return redirect(url_for('dieta_login'))
-    today = request.args.get('date', date.today().strftime('%Y-%m-%d'))
+    today = request.args.get('date', today_dr().strftime('%Y-%m-%d'))
     floor_filter = request.args.get('floor', 'all')
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
@@ -1038,7 +1044,7 @@ def dieta_gerencia():
 def gerencia_reporte():
     if session.get('dieta_role') != 'gerencia':
         return redirect(url_for('dieta_login'))
-    today_str = date.today().strftime('%Y-%m-%d')
+    today_str = today_dr().strftime('%Y-%m-%d')
     inicio = request.args.get('inicio', today_str)
     fin    = request.args.get('fin',    today_str)
     conn = get_db()

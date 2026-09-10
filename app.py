@@ -1071,6 +1071,21 @@ def gerencia_reporte():
     total_pacientes = len(patients)
     total_pedidos   = len(orders)
     confirmados     = sum(1 for o in orders if o['confirmed'])
+    # Totales diarios por tipo de comida (Desayuno/Almuerzo/Cena), con total del período al final
+    daily_meal_counts = {}
+    for o in orders:
+        d = o['meal_date'] or o['order_date']
+        mt = o['meal_time']
+        if mt not in ('desayuno', 'almuerzo', 'cena'):
+            continue
+        if d not in daily_meal_counts:
+            daily_meal_counts[d] = {'desayuno': 0, 'almuerzo': 0, 'cena': 0}
+        daily_meal_counts[d][mt] += 1
+    sorted_days = sorted(daily_meal_counts.keys())
+    month_meal_totals = {'desayuno': 0, 'almuerzo': 0, 'cena': 0}
+    for d in sorted_days:
+        for mt in ('desayuno', 'almuerzo', 'cena'):
+            month_meal_totals[mt] += daily_meal_counts[d][mt]
     return render_template('dieta_reporte.html',
                            patients=patients,
                            orders=orders,
@@ -1079,6 +1094,9 @@ def gerencia_reporte():
                            total_pacientes=total_pacientes,
                            total_pedidos=total_pedidos,
                            confirmados=confirmados,
+                           daily_meal_counts=daily_meal_counts,
+                           sorted_days=sorted_days,
+                           month_meal_totals=month_meal_totals,
                            now=datetime.now().strftime('%Y-%m-%d %H:%M'),
                            floor_label=FLOOR_LABEL,
                            condition_label=CONDITION_LABEL,

@@ -398,7 +398,7 @@ body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
         {% set meal_names  = {'desayuno':'Desayuno','almuerzo':'Almuerzo','cena':'Cena'} %}
         {% set p_orders = orders_map.get(p.id, {}) %}
         {% if p_orders %}
-          {% for meal_date_key in p_orders.keys()|sort %}
+          {% for meal_date_key in p_orders.keys()|sort(reverse=true) %}
             {% set date_meals = p_orders[meal_date_key] %}
             {# Cabecera de fecha #}
             {% if meal_date_key == today %}

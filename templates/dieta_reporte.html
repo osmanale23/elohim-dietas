@@ -125,6 +125,45 @@
     </div>
   </div>
 
+  <!-- TOTALES POR TIPO DE COMIDA -->
+  <div class="section">
+    <div class="section-title">🍽️ Totales por Tipo de Comida</div>
+    {% if sorted_days %}
+    <table>
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>🌅 Desayunos</th>
+          <th>☀️ Almuerzos</th>
+          <th>🌙 Cenas</th>
+          <th>Total Día</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in sorted_days %}
+        {% set c = daily_meal_counts[d] %}
+        <tr>
+          <td><strong>{{ d }}</strong></td>
+          <td>{{ c.desayuno }}</td>
+          <td>{{ c.almuerzo }}</td>
+          <td>{{ c.cena }}</td>
+          <td><strong>{{ c.desayuno + c.almuerzo + c.cena }}</strong></td>
+        </tr>
+        {% endfor %}
+        <tr style="background:#EEF6F0;">
+          <td><strong>TOTAL DEL PERÍODO</strong></td>
+          <td><strong>{{ month_meal_totals.desayuno }}</strong></td>
+          <td><strong>{{ month_meal_totals.almuerzo }}</strong></td>
+          <td><strong>{{ month_meal_totals.cena }}</strong></td>
+          <td><strong>{{ month_meal_totals.desayuno + month_meal_totals.almuerzo + month_meal_totals.cena }}</strong></td>
+        </tr>
+      </tbody>
+    </table>
+    {% else %}
+    <p style="text-align:center;color:#888;padding:32px;">No hay comidas registradas en este período.</p>
+    {% endif %}
+  </div>
+
   <!-- PEDIDOS -->
   <div class="section">
     <div class="section-title">📝 Pedidos / Reportes del Período</div>

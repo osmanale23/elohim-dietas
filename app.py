@@ -972,6 +972,7 @@ def dieta_gerencia():
         return redirect(url_for('dieta_login'))
     today = request.args.get('date', today_dr().strftime('%Y-%m-%d'))
     floor_filter = request.args.get('floor', 'all')
+    today_day = DAY_NAMES[datetime.strptime(today, '%Y-%m-%d').weekday()]
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     if floor_filter == 'all':
@@ -1021,7 +1022,6 @@ def dieta_gerencia():
         except Exception:
             row['meal_day'] = today_day
         orders_map[(o['patient_id'], o['meal_time'])] = row
-    today_day = DAY_NAMES[datetime.strptime(today, '%Y-%m-%d').weekday()]
     return render_template('dieta_gerencia.html',
                            patients=patients,
                            orders_map=orders_map,

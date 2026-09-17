@@ -1015,6 +1015,10 @@ def dieta_gerencia():
     orders_map = {}
     for o in orders:
         row = dict(o)
+        try:
+            row['options_list'] = json.loads(row.get('options_selected') or '[]')
+        except Exception:
+            row['options_list'] = []
         meal_d = row.get('meal_date') or row.get('order_date') or today
         try:
             meal_d_obj = date.fromisoformat(meal_d)

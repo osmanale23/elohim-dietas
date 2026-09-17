@@ -328,10 +328,10 @@
                   </div>
                   {% endif %}
                   {# Opciones confirmadas por cafetería (override) #}
-                  {% if order.get('options_selected') and order['options_selected'] != '[]' %}
+                  {% if order.get('options_list') %}
                   <div style="font-size:10px;color:var(--mid);margin-top:3px;line-height:1.5;">
-                    {% for opt in order['options_selected']|replace('[','',1)|replace(']','',1)|replace('"','',)|split(', ') %}
-                    {% if opt.strip()|length > 2 %}· {{ opt.strip().strip('"') }}<br>{% endif %}
+                    {% for opt in order.get('options_list') %}
+                    · {{ opt }}<br>
                     {% endfor %}
                   </div>
                   {% endif %}

@@ -488,6 +488,14 @@ def dieta_logout():
     return redirect(url_for('dieta_login'))
 
 
+@app.route('/piso9-directo')
+def piso9_directo():
+    # Piso 9 se usa solo ocasionalmente (cuando los demás pisos están llenos),
+    # así que su acceso no requiere contraseña — entra directo al panel de enfermería.
+    session['dieta_role'] = 'piso9'
+    return redirect(url_for('dieta_nurse'))
+
+
 NURSE_ROLES = ('piso5', 'piso6', 'piso9', 'uci', 'emergencia', 'ucin')
 
 # Pisos que pueden RECIBIR pacientes transferidos (piso5, piso6, piso9)

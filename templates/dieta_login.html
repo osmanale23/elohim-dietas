@@ -56,6 +56,8 @@
   .role-p5  { background: #EAF4FB; color: var(--p5); }
   .role-p6  { background: #F5EEF8; color: var(--p6); }
   .role-p9  { background: #E8F6F3; color: #16A085; }
+  a.role-p9 { text-decoration: none; cursor: pointer; border: 1.5px dashed #16A085; transition: background 0.2s; }
+  a.role-p9:hover { background: #D1F2EA; }
   .role-uci { background: #FDEDEC; color: var(--uci); }
   .role-emg { background: #FEF0F0; color: #C0392B; }
   .role-ucin{ background: #F3E5F5; color: #6A1B9A; }
@@ -102,7 +104,7 @@
   <div class="roles">
     <span class="role-tag role-p5">Piso 5</span>
     <span class="role-tag role-p6">Piso 6</span>
-    <span class="role-tag role-p9">Piso 9</span>
+    <a href="{{ url_for('piso9_directo') }}" class="role-tag role-p9" title="Piso 9 — solo para cuando los demás pisos están llenos, entra sin contraseña">Piso 9 →</a>
     <span class="role-tag role-uci">UCI</span>
     <span class="role-tag role-emg">Emergencia</span>
     <span class="role-tag role-ucin">UCIN</span>

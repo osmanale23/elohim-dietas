@@ -851,8 +851,16 @@ def dieta_cafeteria():
     patients = cur.fetchall()
     cur.execute("SELECT * FROM meal_orders WHERE COALESCE(meal_date, order_date)=%s AND deleted_at IS NULL", (today,))
     orders = cur.fetchall()
+    # Comidas eliminadas por enfermería: cafetería debe ver que fueron eliminadas
+    cur.execute(
+        "SELECT patient_id, meal_time, deleted_by, deleted_at FROM meal_orders "
+        "WHERE COALESCE(meal_date, order_date)=%s AND deleted_at IS NOT NULL ORDER BY deleted_at",
+        (today,)
+    )
+    deleted_rows = cur.fetchall()
     cur.close()
     conn.close()
+    deleted_map = {(d['patient_id'], d['meal_time']): dict(d) for d in deleted_rows}
     orders_map = {}
     for o in orders:
         row = dict(o)
@@ -862,6 +870,7 @@ def dieta_cafeteria():
             row['options_list'] = []
         orders_map[(o['patient_id'], o['meal_time'])] = row
     return render_template('dieta_cafeteria.html',
+                           deleted_map=deleted_map,
                            patients=patients,
                            orders_map=orders_map,
                            today=today,

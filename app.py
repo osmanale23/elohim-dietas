@@ -538,7 +538,7 @@ def dieta_nurse():
     cur.execute(
         '''SELECT mo.* FROM meal_orders mo
            JOIN patients p ON mo.patient_id = p.id
-           WHERE p.floor=%s AND p.active=1 AND mo.deleted_at IS NULL
+           WHERE p.floor=%s AND p.active=1
            ORDER BY COALESCE(mo.meal_date, mo.order_date), mo.meal_time''',
         (role,)
     )
@@ -574,6 +574,11 @@ def dieta_nurse():
             orders_map[pid] = {}
         if meal_d not in orders_map[pid]:
             orders_map[pid][meal_d] = {}
+        # Las comidas eliminadas se muestran como "Eliminada" (quedan registradas),
+        # pero si el mismo horario tiene una comida activa, esa es la que se muestra.
+        prev = orders_map[pid][meal_d].get(o['meal_time'])
+        if prev is not None and not prev.get('deleted_at') and row.get('deleted_at'):
+            continue
         orders_map[pid][meal_d][o['meal_time']] = row
     # Construir etiquetas de fecha para todas las fechas únicas en orders_map
     date_labels = {}

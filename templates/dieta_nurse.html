@@ -338,7 +338,7 @@ body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
   {% set alert_patients = [] %}
   {% for p in patients %}
     {% set today_orders = orders_map.get(p.id, {}).get(today, {}) %}
-    {% if today_orders|length == 0 %}
+    {% if today_orders.values()|rejectattr('deleted_at')|list|length == 0 %}
       {% set _ = alert_patients.append(p.name) %}
     {% endif %}
   {% endfor %}
@@ -369,7 +369,7 @@ body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
       {% set today_orders = orders_map.get(p.id, {}).get(today, {}) %}
       {% set pending = [] %}
       {% for mk in ['desayuno','almuerzo','cena'] %}
-        {% if not today_orders.get(mk) %}
+        {% if not today_orders.get(mk) or today_orders.get(mk).get('deleted_at') %}
           {% set _ = pending.append({'desayuno':'🌅 Desayuno','almuerzo':'☀️ Almuerzo','cena':'🌙 Cena'}[mk]) %}
         {% endif %}
       {% endfor %}
@@ -417,7 +417,20 @@ body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
             {# Comidas de ese día #}
             {% for mk in ['desayuno','almuerzo','cena'] %}
               {% set ord = date_meals.get(mk) %}
-              {% if ord %}
+              {% if ord and ord.get('deleted_at') %}
+              <div class="meal-row" style="opacity:.75;background:#F4F4F4;border:1.5px dashed #B0B0B0;">
+                <div class="meal-header">
+                  <span class="meal-label" style="text-decoration:line-through;color:#7F8C8D;">{{ meal_icons[mk] }} {{ meal_names[mk] }}</span>
+                  <span style="background:#FDEDEC;color:#922B21;border:1px solid #E74C3C;border-radius:20px;padding:2px 10px;font-size:11px;font-weight:700;">🗑️ ELIMINADA</span>
+                </div>
+                <div style="font-size:10px;color:#922B21;background:#FDEDEC;border-left:3px solid #E74C3C;padding:4px 8px;border-radius:4px;margin-top:6px;">
+                  🗑️ Eliminada por <strong>{{ ord['deleted_by'] or '—' }}</strong> el {{ ord['deleted_at'][:10] }} a las {{ ord['deleted_at'][11:16] }}
+                </div>
+                {% if ord.get('created_by') %}
+                <div style="font-size:10px;color:#566573;margin-top:4px;">Creada por <strong>{{ ord['created_by'] }}</strong></div>
+                {% endif %}
+              </div>
+              {% elif ord %}
               {% set od = ord.get('diet_type') or 'corriente' %}
               <div class="meal-row">
                 <div class="meal-header">

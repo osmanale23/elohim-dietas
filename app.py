@@ -847,7 +847,13 @@ def dieta_cafeteria():
     today_day = DAY_NAMES[today_date_obj.weekday()]
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute('SELECT * FROM patients WHERE active=1 ORDER BY floor, room')
+    # También los pacientes dados de alta que tenían comida ese día: si no, desaparecen
+    # del panel y cafetería no entiende por qué ya no está su pedido.
+    cur.execute(
+        "SELECT * FROM patients WHERE active=1 OR id IN ("
+        "SELECT patient_id FROM meal_orders WHERE COALESCE(meal_date, order_date)=%s) ORDER BY floor, room",
+        (today,)
+    )
     patients = cur.fetchall()
     cur.execute("SELECT * FROM meal_orders WHERE COALESCE(meal_date, order_date)=%s AND deleted_at IS NULL", (today,))
     orders = cur.fetchall()

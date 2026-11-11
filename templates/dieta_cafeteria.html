@@ -277,7 +277,12 @@
           {% set o_cond = p.condition if p.condition and p.condition != 'normal' else (order.condition if order and order.condition and order.condition != 'normal' else 'normal') %}
           {% set o_cero = order.dieta_cero if order else 0 %}
           {% set o_notes = order.meal_notes if order and order.meal_notes else '' %}
-          <div class="patient-row floor-{{ p.floor }}">
+          <div class="patient-row floor-{{ p.floor }}"{% if not p.active %} style="opacity:.6;"{% endif %}>
+            {% if not p.active %}
+            <div style="background:#FDF2E9;border:1.5px dashed #E67E22;border-radius:10px;padding:8px 12px;margin-bottom:8px;font-size:12px;color:#A04000;font-weight:700;">
+              🚪 Paciente dado de alta{% if p.updated_at %} el {{ p.updated_at[:10] }} a las {{ p.updated_at[11:16] }}{% endif %} — ya no está en la habitación
+            </div>
+            {% endif %}
             <div class="patient-info">
               <span class="patient-name">{{ p.name }}</span>
               <span class="room-tag">{% if p.floor == 'uci' %}Cama {% elif p.floor == 'piso9' %}Cama #{% else %}Hab. {% endif %}{{ p.room }}</span>

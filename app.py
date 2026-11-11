@@ -1035,14 +1035,14 @@ def dieta_gerencia():
     # Comidas eliminadas por enfermería (quedan registradas para auditoría)
     if floor_filter == 'all':
         cur.execute(
-            '''SELECT mo.id, mo.meal_time, mo.created_by, mo.created_at, mo.deleted_by, mo.deleted_at,
+            '''SELECT mo.id, mo.meal_time, mo.created_by, mo.created_at, mo.deleted_by, mo.deleted_at, mo.delivery_status,
                       p.name AS patient_name, p.floor, p.room
                FROM meal_orders mo JOIN patients p ON mo.patient_id = p.id
                WHERE COALESCE(mo.meal_date, mo.order_date)=%s AND mo.deleted_at IS NOT NULL
                ORDER BY mo.deleted_at DESC''', (today,))
     else:
         cur.execute(
-            '''SELECT mo.id, mo.meal_time, mo.created_by, mo.created_at, mo.deleted_by, mo.deleted_at,
+            '''SELECT mo.id, mo.meal_time, mo.created_by, mo.created_at, mo.deleted_by, mo.deleted_at, mo.delivery_status,
                       p.name AS patient_name, p.floor, p.room
                FROM meal_orders mo JOIN patients p ON mo.patient_id = p.id
                WHERE COALESCE(mo.meal_date, mo.order_date)=%s AND mo.deleted_at IS NOT NULL AND p.floor=%s

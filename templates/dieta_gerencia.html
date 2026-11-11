@@ -390,20 +390,23 @@
           <th>Creada por</th>
           <th>Eliminada por</th>
           <th>Fecha y hora</th>
+          <th>Estado en cafetería</th>
         </tr>
       </thead>
       <tbody>
         {% for d in deleted_orders %}
-        <tr>
+        {% set st = d['delivery_status'] or 'pendiente' %}
+        <tr{% if st != 'pendiente' %} style="background:#FFF4E5;"{% endif %}>
           <td><strong>{{ d['patient_name'] }}</strong></td>
           <td>{{ floor_label.get(d['floor'], d['floor']) }} · {{ d['room'] }}</td>
           <td>{{ {'desayuno':'🌅 Desayuno','almuerzo':'☀️ Almuerzo','cena':'🌙 Cena'}.get(d['meal_time'], d['meal_time']) }}</td>
           <td>{{ d['created_by'] or '—' }}</td>
           <td style="color:#922B21;font-weight:700;">{{ d['deleted_by'] or '—' }}</td>
           <td>{{ d['deleted_at'][:10] }} {{ d['deleted_at'][11:16] }}</td>
+          <td>{% if st != 'pendiente' %}<strong style="color:#B9770E;">⚠️ {{ st|replace('_',' ')|capitalize }}</strong><div style="font-size:11px;color:#7F8C8D;">Cafetería ya la tenía en curso: revisar al conciliar</div>{% else %}<span style="color:#7F8C8D;">Pendiente (no se había preparado)</span>{% endif %}</td>
         </tr>
         {% else %}
-        <tr class="empty-row"><td colspan="6">No hay comidas eliminadas en este día.</td></tr>
+        <tr class="empty-row"><td colspan="7">No hay comidas eliminadas en este día.</td></tr>
         {% endfor %}
       </tbody>
     </table>

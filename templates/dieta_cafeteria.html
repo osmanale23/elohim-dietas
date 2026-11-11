@@ -449,6 +449,31 @@
     {% endif %}
   </div>
   {% endfor %}
+
+  <!-- PANEL: COMIDAS BORRADAS Y ALTAS DEL DÍA -->
+  <div style="margin-top:28px;background:#fff;border:1.5px solid #E0E0E0;border-radius:14px;padding:18px 20px;">
+    <div style="font-weight:800;font-size:16px;color:#922B21;">🗑️ Comidas borradas por enfermería · {{ today }}</div>
+    <div style="font-size:12px;color:#7F8C8D;margin:4px 0 12px;">Úsalo para conciliar: lo que enfermería borró o dio de alta después de enviarte el pedido.</div>
+    {% for d in deleted_panel %}
+    <div style="opacity:.75;background:#F4F4F4;border:1px dashed #B0B0B0;border-radius:10px;padding:10px 14px;margin-bottom:8px;font-size:13px;">
+      <strong>{{ d['patient_name'] }}</strong> · {{ floor_label.get(d['floor'], d['floor']) }} · {{ d['room'] }} ·
+      {{ {'desayuno':'🌅 Desayuno','almuerzo':'☀️ Almuerzo','cena':'🌙 Cena'}.get(d['meal_time'], d['meal_time']) }}
+      <div style="color:#566573;font-size:12px;margin-top:3px;">Borrada por <strong>{{ d['deleted_by'] or '—' }}</strong> el {{ d['deleted_at'][:10] }} a las {{ d['deleted_at'][11:16] }}
+        · Estado en cafetería: <strong>{{ (d['delivery_status'] or 'pendiente')|replace('_',' ') }}</strong></div>
+    </div>
+    {% else %}
+    <div style="color:#7F8C8D;font-size:13px;">No hay comidas borradas este día.</div>
+    {% endfor %}
+    {% if altas_panel %}
+    <div style="font-weight:800;font-size:14px;color:#A04000;margin:16px 0 8px;">🚪 Pacientes dados de alta con comida este día</div>
+    {% for p in altas_panel %}
+    <div style="opacity:.75;background:#FDF2E9;border:1px dashed #E67E22;border-radius:10px;padding:10px 14px;margin-bottom:8px;font-size:13px;">
+      <strong>{{ p['name'] }}</strong> · {{ floor_label.get(p['floor'], p['floor']) }} · {{ p['room'] }}
+      {% if p['updated_at'] %}<div style="color:#A04000;font-size:12px;margin-top:3px;">Dado de alta el {{ p['updated_at'][:10] }} a las {{ p['updated_at'][11:16] }}</div>{% endif %}
+    </div>
+    {% endfor %}
+    {% endif %}
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>

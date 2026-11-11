@@ -867,6 +867,13 @@ def dieta_cafeteria():
     cur.close()
     conn.close()
     deleted_map = {(d['patient_id'], d['meal_time']): dict(d) for d in deleted_rows}
+    pat_by_id = {p['id']: p for p in patients}
+    deleted_panel = []
+    for d in sorted(deleted_rows, key=lambda r: r['deleted_at'] or '', reverse=True):
+        p = pat_by_id.get(d['patient_id'])
+        if p:
+            deleted_panel.append({**dict(d), 'patient_name': p['name'], 'floor': p['floor'], 'room': p['room']})
+    altas_panel = [p for p in patients if not p['active']]
     orders_map = {}
     for o in orders:
         row = dict(o)
@@ -876,7 +883,7 @@ def dieta_cafeteria():
             row['options_list'] = []
         orders_map[(o['patient_id'], o['meal_time'])] = row
     return render_template('dieta_cafeteria.html',
-                           deleted_map=deleted_map,
+                           deleted_map=deleted_map, deleted_panel=deleted_panel, altas_panel=altas_panel,
                            patients=patients,
                            orders_map=orders_map,
                            today=today,

@@ -280,7 +280,7 @@
           <div class="patient-row floor-{{ p.floor }}"{% if not p.active %} style="opacity:.6;"{% endif %}>
             {% if not p.active %}
             <div style="background:#FDF2E9;border:1.5px dashed #E67E22;border-radius:10px;padding:8px 12px;margin-bottom:8px;font-size:12px;color:#A04000;font-weight:700;">
-              🚪 Paciente dado de alta{% if p.updated_at %} el {{ p.updated_at[:10] }} a las {{ p.updated_at[11:16] }}{% endif %} — ya no está en la habitación
+              🚪 Paciente dado de alta{% if p.updated_by %} por {{ p.updated_by }}{% endif %}{% if p.updated_at %} el {{ p.updated_at[:10] }} a las {{ p.updated_at[11:16] }}{% endif %} — ya no está en la habitación
             </div>
             {% endif %}
             <div class="patient-info">
@@ -469,7 +469,7 @@
     {% for p in altas_panel %}
     <div style="opacity:.75;background:#FDF2E9;border:1px dashed #E67E22;border-radius:10px;padding:10px 14px;margin-bottom:8px;font-size:13px;">
       <strong>{{ p['name'] }}</strong> · {{ floor_label.get(p['floor'], p['floor']) }} · {{ p['room'] }}
-      {% if p['updated_at'] %}<div style="color:#A04000;font-size:12px;margin-top:3px;">Dado de alta el {{ p['updated_at'][:10] }} a las {{ p['updated_at'][11:16] }}</div>{% endif %}
+      {% if p['updated_at'] %}<div style="color:#A04000;font-size:12px;margin-top:3px;">Dado de alta{% if p['updated_by'] %} por <strong>{{ p['updated_by'] }}</strong>{% endif %} el {{ p['updated_at'][:10] }} a las {{ p['updated_at'][11:16] }}</div>{% endif %}
     </div>
     {% endfor %}
     {% endif %}

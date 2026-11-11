@@ -760,7 +760,9 @@ def discharge_patient(pid):
     if nurse_required(): return jsonify({'error': 'unauthorized'}), 403
     conn = get_db()
     cur = conn.cursor()
-    cur.execute('UPDATE patients SET active=0, updated_at=%s WHERE id=%s', (datetime.now().isoformat(), pid))
+    nurse = session.get('nurse_name', session.get('dieta_role', ''))
+    cur.execute('UPDATE patients SET active=0, updated_at=%s, updated_by=%s WHERE id=%s',
+                (datetime.now().isoformat(timespec='seconds'), nurse, pid))
     conn.commit()
     cur.close()
     conn.close()

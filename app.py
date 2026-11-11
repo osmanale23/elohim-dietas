@@ -774,7 +774,15 @@ def delete_meal_order(order_id):
     nurse = session.get('nurse_name', session.get('dieta_role', ''))
     now_str = datetime.now().isoformat(timespec='seconds')
     conn = get_db()
-    cur = conn.cursor()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    # Si cafetería ya empezó a prepararla (recibido/en proceso/en camino/entregado),
+    # no se puede eliminar: la comida ya se hizo y rompería la conciliación.
+    cur.execute('SELECT delivery_status FROM meal_orders WHERE id=%s AND deleted_at IS NULL', (order_id,))
+    row = cur.fetchone()
+    if row and (row['delivery_status'] or 'pendiente') != 'pendiente':
+        cur.close()
+        conn.close()
+        return jsonify({'ok': False, 'error': 'Cafetería ya la recibió o está preparándola. Avisa a cafetería en vez de eliminarla.'}), 409
     cur.execute(
         'UPDATE meal_orders SET deleted_at=%s, deleted_by=%s WHERE id=%s AND deleted_at IS NULL',
         (now_str, nurse, order_id)

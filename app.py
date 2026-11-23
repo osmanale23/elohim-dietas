@@ -874,7 +874,7 @@ def dieta_cafeteria():
     for d in sorted(deleted_rows, key=lambda r: r['deleted_at'] or '', reverse=True):
         p = pat_by_id.get(d['patient_id'])
         if p:
-            deleted_panel.append({**dict(d), 'patient_name': p['name'], 'floor': p['floor'], 'room': p['room']})
+            deleted_panel.append({**dict(d), 'patient_name': p['name'], 'floor': p['floor'], 'room': p['room'], 'edad': p.get('edad')})
     altas_panel = [p for p in patients if not p['active']]
     orders_map = {}
     for o in orders:

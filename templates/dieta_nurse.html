@@ -730,8 +730,8 @@ body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
         {% endif %}
       </div>
       <div class="form-group">
-        <label>Edad</label>
-        <input type="number" id="addEdad" min="0" max="120" placeholder="Ej: 45">
+        <label>Edad (obligatoria)</label>
+        <input type="number" id="addEdad" min="0" max="120" placeholder="Ej: 45" required>
       </div>
     </div>
     <div class="row2">
@@ -776,8 +776,9 @@ body { background:var(--bone); font-family:sans-serif; min-height:100vh; }
         ⚠️ Seleccionaste "Otra" — describe exactamente qué necesita el paciente en observaciones.
       </div>
       <div class="form-group">
-        <label>Condición Especial</label>
+        <label>Condición Especial (obligatorio: elige una opción)</label>
         <select id="addCondition">
+          <option value="" selected>— Selecciona —</option>
           <option value="normal">Sin condición especial</option>
           <option value="diabetico">Diabético</option>
           <option value="renal">Insuficiencia Renal</option>
@@ -973,23 +974,33 @@ async function saveAdd() {
   const name = document.getElementById('addName').value.trim();
   const room = document.getElementById('addRoom').value.trim();
   if (!name || !room) { showToast('Completa nombre y habitación/cama'); return; }
+  const edadTxt = document.getElementById('addEdad').value.trim();
+  const edadNum = Number(edadTxt);
+  if (!edadTxt || !Number.isInteger(edadNum) || edadNum < 0 || edadNum > 120) {
+    showToast('⚠️ Escribe la edad del paciente (obligatoria)'); document.getElementById('addEdad').focus(); return;
+  }
   const dieta_cero = document.getElementById('dietaCeroAddCheck').checked;
+  if (!dieta_cero && !document.getElementById('addCondition').value) {
+    showToast('⚠️ Elige la condición del paciente (o "Sin condición especial")'); document.getElementById('addCondition').focus(); return;
+  }
   const r = await fetch('/api/patient/add', {
     method: 'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({
       name, room,
-      edad: document.getElementById('addEdad').value || null,
+      edad: edadNum,
       sexo: document.getElementById('addSexo').value,
       meal_time: document.getElementById('addMealTime').value,
       meal_date: document.getElementById('addMealDate').value || new Date().toISOString().slice(0,10),
       diet_type: dieta_cero ? 'cero' : document.getElementById('addDiet').value,
-      condition: document.getElementById('addCondition').value,
+      condition: document.getElementById('addCondition').value || 'normal',
       meal_notes: document.getElementById('addNotes').value,
       dieta_cero: dieta_cero,
       notes: document.getElementById('addNotes').value,
     })
   });
-  if ((await r.json()).ok) { showToast('Paciente registrado ✓'); setTimeout(()=>location.reload(), 1000); }
+  const res = await r.json().catch(() => ({}));
+  if (res.ok) { showToast('Paciente registrado ✓'); setTimeout(()=>location.reload(), 1000); }
+  else { showToast('⚠️ ' + (res.error || 'No se pudo registrar el paciente')); }
 }
 
 // ── CAMBIAR HABITACIÓN / PISO ──────────────────────────────────

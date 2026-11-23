@@ -640,6 +640,17 @@ def add_patient():
     if nurse_required(): return jsonify({'error': 'unauthorized'}), 403
     d = request.json
     role = session['dieta_role']
+    # La edad es obligatoria (cafetería la necesita en cada pedido) y la condición debe elegirse
+    # (salvo dieta cero, donde no se prepara comida). Se valida aquí también, no solo en pantalla.
+    try:
+        edad = int(str(d.get('edad')).strip())
+    except (TypeError, ValueError):
+        edad = None
+    if edad is None or not 0 <= edad <= 120:
+        return jsonify({'ok': False, 'error': 'La edad del paciente es obligatoria (0 a 120).'}), 400
+    if not d.get('dieta_cero') and d.get('condition') not in ('normal', 'diabetico', 'renal', 'disfagia', 'cardiopatia'):
+        return jsonify({'ok': False, 'error': 'Elige la condición del paciente (o "Sin condición especial").'}), 400
+    d['edad'] = edad
     conn = get_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     nurse_name = session.get('nurse_name', role)
